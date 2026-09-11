@@ -33,42 +33,29 @@ jobs:
       shell: pwsh
       run: |
         Set-Location "${{ github.workspace }}"
-        Set-Location ".."
-
-        New-Item -ItemType Directory -Force -Path "third_party\opus\Win32" | Out-Null
-
         Write-Host "Downloading Opus..."
         $opusUrl = "https://github.com/xiph/opus/archive/refs/tags/v1.5.2.zip"
         Invoke-WebRequest -Uri $opusUrl -OutFile "opus.zip"
+        if (Test-Path "opus-src") { Remove-Item "opus-src" -Recurse -Force }
         Expand-Archive -Path "opus.zip" -DestinationPath "." -Force
-
-        $opusDir = Get-ChildItem -Directory -Filter "opus-*" | Select-Object -First 1
-        if (-not $opusDir) {
-            Write-Host "ERROR: Opus source not found"
-            exit 1
-        }
-
+        $opusDir = Get-ChildItem -Directory | Where-Object { $_.Name -like "opus-1.5.2*" } | Select-Object -First 1
+        if (-not $opusDir) { Write-Host "ERROR: Opus source not found"; exit 1 }
+        Rename-Item $opusDir.FullName "opus-src"
         Write-Host "Configuring Opus..."
-        Set-Location $opusDir.FullName
+        if (Test-Path "opus-build") { Remove-Item "opus-build" -Recurse -Force }
+        cmake -S "opus-src" -B "opus-build" -G "Visual Studio 17 2022" -A Win32 -DOPUS_BUILD_PROGRAMS=OFF -DOPUS_BUILD_TESTING=OFF
+        if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: CMake configure failed"; exit $LASTEXITCODE }
+        Write-Host "Building Opus..."
+        cmake --build "opus-build" --config Release --parallel
+        if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: Opus build failed"; exit $LASTEXITCODE }
+        $opusLib = Get-ChildItem "opus-build" -Recurse -Filter "opus.lib" | Select-Object -First 1
+        if (-not $opusLib) { Write-Host "ERROR: opus.lib not found"; Get-ChildItem "opus-build" -Recurse -File | Select-Object -First 100 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
+        $dest = "${{ github.workspace }}..	hird_partyopusWin32"
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        Copy-Item $opusLib.FullName "$destopus.lib" -Force
+        if (-not (Test-Path "$destopus.lib")) { Write-Host "ERROR: opus.lib copy failed"; exit 1 }
+        Write-Host "Opus library ready: $destopus.lib"
 
-        if (Test-Path "win32\VS2015\opus.sln") {
-            & msbuild "win32\VS2015\opus.sln" /p:Configuration=Release /p:Platform=Win32 /m
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        } else {
-            Write-Host "ERROR: Opus Visual Studio solution not found"
-            exit 1
-        }
-
-        Get-ChildItem -Path "." -Recurse -Filter "opus.lib" | ForEach-Object {
-            Copy-Item $_.FullName -Destination "${{ github.workspace }}\..\third_party\opus\Win32\opus.lib" -Force
-        }
-
-        if (-not (Test-Path "${{ github.workspace }}\..\third_party\opus\Win32\opus.lib")) {
-            Write-Host "ERROR: opus.lib was not created"
-            exit 1
-        }
-
-        Write-Host "Opus library ready"
     - name: Setup Directory Structure
       shell: pwsh
       run: |

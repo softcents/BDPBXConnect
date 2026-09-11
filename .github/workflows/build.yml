@@ -254,6 +254,51 @@ jobs:
 
         Write-Host "PJSIP headers and libraries copied successfully"
 
+    - name: Prepare PJSIP Static Library
+      shell: pwsh
+      run: |
+        Set-Location "${{ github.workspace }}"
+        Set-Location ".."
+
+        Write-Host "Preparing combined PJSIP static library..."
+
+        $libDir = "${{ github.workspace }}..lib"
+        New-Item -ItemType Directory -Force -Path $libDir | Out-Null
+
+        $libs = @(
+          "pjprojectpjliblibpjlib-i386-Win32-vc14-Release.lib",
+          "pjprojectpjnathlibpjnath-i386-Win32-vc14-Release.lib",
+          "pjprojectpjsiplibpjsip-simple-i386-Win32-vc14-Release.lib",
+          "pjprojectpjsiplibpjsua-lib-i386-Win32-vc14-Release.lib"
+        )
+
+        $existing = @($libs | Where-Object { Test-Path $_ })
+
+        if ($existing.Count -eq 0) {
+          Write-Host "ERROR: No PJSIP libraries found"
+          exit 1
+        }
+
+        Write-Host "Libraries found:"
+        $existing | ForEach-Object { Write-Host $_ }
+
+        $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
+
+        lib /OUT:"$target" $existing
+
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "ERROR: Failed to create combined PJSIP library"
+          exit $LASTEXITCODE
+        }
+
+        if (-not (Test-Path $target)) {
+          Write-Host "ERROR: Combined PJSIP library was not created"
+          exit 1
+        }
+
+        Write-Host "Combined PJSIP library ready:"
+        Write-Host $target
+
     - name: Build BD PBX Connect
       working-directory: ${{ github.workspace }}
       shell: pwsh

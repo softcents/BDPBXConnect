@@ -36,4 +36,11 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
+; Remove the installed program directory.
 Type: filesandordirs; Name: "{app}"
+; Remove all BD PBX configuration, accounts, contacts and cached local data.
+Type: filesandordirs; Name: "{userappdata}\BD PBX"
+Type: filesandordirs; Name: "{localappdata}\BD PBX"
+; Remove legacy/config folders created by previous builds using the executable name.
+Type: filesandordirs; Name: "{userappdata}\BDPBXConnect"
+Type: filesandordirs; Name: "{localappdata}\BDPBXConnect"

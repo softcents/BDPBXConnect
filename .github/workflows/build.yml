@@ -300,7 +300,7 @@ jobs:
         $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
 
         Write-Host "Creating combined library..."
-        $libExe = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC" -Recurse -Filter "lib.exe" | Where-Object { $_.FullName -match "\\HostX86\\x86\\" } | Select-Object -First 1; if (-not $libExe) { Write-Host "ERROR: lib.exe not found"; exit 1 }; Write-Host "Using lib.exe: $($libExe.FullName)"; & lib.exe "/OUT:$target" $existing $libExe.FullName "/OUT:$target" $existing $libExe.FullName "/OUT:$target" $existing
+        $libExe = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC" -Recurse -Filter "lib.exe" | Where-Object { $_.FullName -match "\\HostX86\\x86\\" } | Select-Object -First 1; if (-not $libExe) { Write-Host "ERROR: lib.exe not found"; exit 1 }; Write-Host "Using lib.exe: $($libExe.FullName)"; & lib.exe $libExe.FullName "/OUT:$target" $existing $libExe.FullName "/OUT:$target" $existing $libExe.FullName "/OUT:$target" $existing
 
         if ($LASTEXITCODE -ne 0) {
           Write-Host "ERROR: Failed to create combined PJSIP library"

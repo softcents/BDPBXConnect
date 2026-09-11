@@ -61,20 +61,23 @@ CONTROL         "Publish Presence", IDC_PUBLISH, "Button", BS_AUTOCHECKBOX | WS_
 CONTROL         "Allow IP Rewrite", IDC_REWRITE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 250, 198, 100, 12
 CONTROL         "ICE", IDC_ICE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 250, 221, 100, 12
 CONTROL         "Disable Session Timers", IDC_SESSION_TIMER, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 250, 244, 100, 12
-CONTROL         "", IDC_SYSLINK_ACCOUNT_DELETE, "SysLink", 0x0, 10, 352, 75, 8, NOT WS_VISIBLE
-DEFPUSHBUTTON   "Save", IDOK, 110, 370, 80, 18
-PUSHBUTTON      "Cancel", IDCANCEL, 195, 370, 80, 18
+CONTROL         "", IDC_SYSLINK_ACCOUNT_DELETE, "SysLink", 0x0, 10, 342, 75, 8, NOT WS_VISIBLE
+DEFPUSHBUTTON   "Save", IDOK, 110, 365, 80, 18
+PUSHBUTTON      "Cancel", IDCANCEL, 195, 365, 80, 18
 END
 //-----------------------------------------------------------------------
 '@
 
-# Compact the lower controls so the complete dialog, including Save/Cancel, fits on a normal 768-1080px desktop.
-$accountSection = $accountSection.Replace('RTEXT           "Public Address", IDC_STATIC, 10, 345, 90, 8, SS_WORDELLIPSIS', 'RTEXT           "Public Address", IDC_STATIC, 10, 310, 90, 8, SS_WORDELLIPSIS')
-$accountSection = $accountSection.Replace('COMBOBOX        IDC_PUBLIC_ADDR, 105, 342, 105, 30', 'COMBOBOX        IDC_PUBLIC_ADDR, 105, 307, 105, 30')
-$accountSection = $accountSection.Replace('RTEXT           "Register Refresh", IDC_STATIC, 10, 379, 90, 8, SS_WORDELLIPSIS', 'RTEXT           "Register Refresh", IDC_STATIC, 10, 344, 90, 8, SS_WORDELLIPSIS')
-$accountSection = $accountSection.Replace('EDITTEXT        IDC_ACCOUNT_REGISTER_REFRESH, 105, 376, 45, 16', 'EDITTEXT        IDC_ACCOUNT_REGISTER_REFRESH, 105, 341, 45, 16')
-$accountSection = $accountSection.Replace('RTEXT           "Keep-Alive", IDC_STATIC, 155, 379, 55, 8, SS_WORDELLIPSIS', 'RTEXT           "Keep-Alive", IDC_STATIC, 155, 344, 55, 8, SS_WORDELLIPSIS')
-$accountSection = $accountSection.Replace('EDITTEXT        IDC_ACCOUNT_KEEP_ALIVE, 212, 376, 35, 16', 'EDITTEXT        IDC_ACCOUNT_KEEP_ALIVE, 212, 341, 35, 16')
+# Move the final controls upward so Save/Cancel are always visible.
+$accountSection = $accountSection.Replace('RTEXT           "Public Address", IDC_STATIC, 10, 345, 90, 8, SS_WORDELLIPSIS', 'RTEXT           "Public Address", IDC_STATIC, 10, 300, 90, 8, SS_WORDELLIPSIS')
+$accountSection = $accountSection.Replace('COMBOBOX        IDC_PUBLIC_ADDR, 105, 342, 105, 30', 'COMBOBOX        IDC_PUBLIC_ADDR, 105, 297, 105, 30')
+$accountSection = $accountSection.Replace('RTEXT           "Register Refresh", IDC_STATIC, 10, 379, 90, 8, SS_WORDELLIPSIS', 'RTEXT           "Register Refresh", IDC_STATIC, 10, 334, 90, 8, SS_WORDELLIPSIS')
+$accountSection = $accountSection.Replace('EDITTEXT        IDC_ACCOUNT_REGISTER_REFRESH, 105, 376, 45, 16', 'EDITTEXT        IDC_ACCOUNT_REGISTER_REFRESH, 105, 331, 45, 16')
+$accountSection = $accountSection.Replace('RTEXT           "Keep-Alive", IDC_STATIC, 155, 379, 55, 8, SS_WORDELLIPSIS', 'RTEXT           "Keep-Alive", IDC_STATIC, 155, 334, 55, 8, SS_WORDELLIPSIS')
+$accountSection = $accountSection.Replace('EDITTEXT        IDC_ACCOUNT_KEEP_ALIVE, 212, 376, 35, 16', 'EDITTEXT        IDC_ACCOUNT_KEEP_ALIVE, 212, 331, 35, 16')
+$accountSection = $accountSection.Replace('CONTROL         "", IDC_SYSLINK_ACCOUNT_DELETE, "SysLink", 0x0, 10, 342, 75, 8, NOT WS_VISIBLE', 'CONTROL         "", IDC_SYSLINK_ACCOUNT_DELETE, "SysLink", 0x0, 10, 345, 75, 8, NOT WS_VISIBLE')
+$accountSection = $accountSection.Replace('DEFPUSHBUTTON   "Save", IDOK, 110, 365, 80, 18', 'DEFPUSHBUTTON   "Save", IDOK, 110, 365, 80, 18')
+$accountSection = $accountSection.Replace('PUSHBUTTON      "Cancel", IDCANCEL, 195, 365, 80, 18', 'PUSHBUTTON      "Cancel", IDCANCEL, 195, 365, 80, 18')
 
 $dialog = $dialog.Substring(0, $start) + $accountSection + $dialog.Substring($end)
 Set-Content -Path $dialogPath -Value $dialog -Encoding utf8
@@ -82,97 +85,64 @@ Set-Content -Path $dialogPath -Value $dialog -Encoding utf8
 $cppPath = Join-Path $env:GITHUB_WORKSPACE 'AccountDlg.cpp'
 $cpp = Get-Content -Raw -Path $cppPath
 
-$cpp = $cpp.Replace('CDialog::OnInitDialog();', 'CDialog::OnInitDialog();\n\n\tSetWindowText(_T("BD PBX - Add Account"));')
-$cpp = $cpp -replace '(?s)\tGetDlgItem\(IDC_ACCOUNT_REQUIRED_USERNAME\)->ShowWindow\(show\);\r?\n\tGetDlgItem\(IDC_ACCOUNT_REQUIRED_DOMAIN\)->ShowWindow\(show\);\r?\n\tGetDlgItem\(IDC_EDIT_SERVER\)->EnableWindow\(id\);', ''
+if ($cpp -notmatch 'SetWindowText\(_T\("BD PBX - Add Account"\)\)') {
+    $cpp = [regex]::Replace($cpp, 'CDialog::OnInitDialog\(\);', "CDialog::OnInitDialog();`r`n`r`n`tSetWindowText(_T(\"BD PBX - Add Account\"));", 1)
+}
 
-$oldLoad = @'
-\tedit = (CEdit*)GetDlgItem(IDC_ACCOUNT_LABEL);
-\tedit->SetWindowText(m_Account.label);
-
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_SERVER);
-\tedit->SetWindowText(m_Account.server);
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_PROXY);
-\tedit->SetWindowText(m_Account.proxy);
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_DOMAIN);
-\tedit->SetWindowText(m_Account.domain);
-
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_AUTHID);
-\tedit->SetWindowText(m_Account.authID);
-
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_USERNAME);
-\tedit->SetWindowText(m_Account.username);
-'@
+$oldLoadPattern = '(?s)\tedit = \(CEdit\*\)GetDlgItem\(IDC_ACCOUNT_LABEL\);.*?\tedit->SetWindowText\(m_Account\.username\);\r?\n'
 $newLoad = @'
-\tedit = (CEdit*)GetDlgItem(IDC_ACCOUNT_LABEL);
-\tif (m_Account.label.IsEmpty()) {
-\t\tm_Account.label = _T("Account 1");
-\t}
-\tedit->SetWindowText(m_Account.label);
+	edt = (CEdit*)GetDlgItem(IDC_ACCOUNT_LABEL);
+	if (m_Account.label.IsEmpty()) {
+		m_Account.label = _T("Account 1");
+	}
+	edit->SetWindowText(m_Account.label);
 
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_DOMAIN);
-\tCString tenantDomain = m_Account.domain;
-\tCString tenantSuffix = _T(".bdpbx.com");
-\tif (tenantDomain.Right(tenantSuffix.GetLength()).CompareNoCase(tenantSuffix) == 0) {
-\t\ttenantDomain = tenantDomain.Left(tenantDomain.GetLength() - tenantSuffix.GetLength());
-\t}
-\tedit->SetWindowText(tenantDomain);
+	edit = (CEdit*)GetDlgItem(IDC_EDIT_DOMAIN);
+	CString tenantDomain = m_Account.domain;
+	CString tenantSuffix = _T(".bdpbx.com");
+	if (tenantDomain.Right(tenantSuffix.GetLength()).CompareNoCase(tenantSuffix) == 0) {
+		tenantDomain = tenantDomain.Left(tenantDomain.GetLength() - tenantSuffix.GetLength());
+	}
+	edit->SetWindowText(tenantDomain);
 
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_USERNAME);
-\tedit->SetWindowText(m_Account.username);
+	edit = (CEdit*)GetDlgItem(IDC_EDIT_USERNAME);
+	edit->SetWindowText(m_Account.username);
 '@
-if (-not $cpp.Contains($oldLoad)) { throw 'AccountDlg Load block not found' }
-$cpp = $cpp.Replace($oldLoad, $newLoad)
+if ($cpp -match $oldLoadPattern) { $cpp = [regex]::Replace($cpp, $oldLoadPattern, $newLoad, 1) }
+else { throw 'AccountDlg Load block not found' }
 
-$oldSave = @'
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_SERVER);
-\tedit->GetWindowText(str);
-\tm_Account.server=str.Trim();
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_PROXY);
-\tedit->GetWindowText(str);
-\tm_Account.proxy=str.Trim();
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_DOMAIN);
-\tedit->GetWindowText(str);
-\tm_Account.domain=str.Trim();
-
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_AUTHID);
-\tedit->GetWindowText(str);
-\tm_Account.authID=str.Trim();
-
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_USERNAME);
-\tedit->GetWindowText(str);
-\tm_Account.username=str.Trim();
-'@
+$oldSavePattern = '(?s)\tedit = \(CEdit\*\)GetDlgItem\(IDC_EDIT_SERVER\);.*?\tm_Account\.username=str\.Trim\(\);\r?\n'
 $newSave = @'
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_DOMAIN);
-\tedit->GetWindowText(str);
-\tstr = str.Trim();
-\tstr.Trim(_T('.'));
-\tCString tenantSuffix = _T(".bdpbx.com");
-\tif (str.Right(tenantSuffix.GetLength()).CompareNoCase(tenantSuffix) == 0) {
-\t\tstr = str.Left(str.GetLength() - tenantSuffix.GetLength());
-\t\tstr.Trim(_T('.'));
-\t}
-\tif (str.IsEmpty()) {
-\t\tAfxMessageBox(_T("Please enter your BD PBX subdomain."));
-\t\tGetDlgItem(IDC_EDIT_DOMAIN)->SetFocus();
-\t\treturn;
-\t}
-\tm_Account.domain = str + tenantSuffix;
+	edit = (CEdit*)GetDlgItem(IDC_EDIT_DOMAIN);
+	edit->GetWindowText(str);
+	str = str.Trim();
+	str.Trim(_T('.'));
+	CString tenantSuffix = _T(".bdpbx.com");
+	if (str.Right(tenantSuffix.GetLength()).CompareNoCase(tenantSuffix) == 0) {
+		str = str.Left(str.GetLength() - tenantSuffix.GetLength());
+		str.Trim(_T('.'));
+	}
+	if (str.IsEmpty()) {
+		AfxMessageBox(_T("Please enter your BD PBX subdomain."));
+		GetDlgItem(IDC_EDIT_DOMAIN)->SetFocus();
+		return;
+	}
+	m_Account.domain = str + tenantSuffix;
 
-\tedit = (CEdit*)GetDlgItem(IDC_EDIT_USERNAME);
-\tedit->GetWindowText(str);
-\tm_Account.username=str.Trim();
-\tif (m_Account.username.IsEmpty()) {
-\t\tAfxMessageBox(_T("Please enter your SIP username."));
-\t\tGetDlgItem(IDC_EDIT_USERNAME)->SetFocus();
-\t\treturn;
-\t}
-\tm_Account.authID=m_Account.username;
-\tm_Account.server=m_Account.domain;
-\tm_Account.proxy=m_Account.domain;
+	edit = (CEdit*)GetDlgItem(IDC_EDIT_USERNAME);
+	edit->GetWindowText(str);
+	m_Account.username=str.Trim();
+	if (m_Account.username.IsEmpty()) {
+		AfxMessageBox(_T("Please enter your SIP username."));
+		GetDlgItem(IDC_EDIT_USERNAME)->SetFocus();
+		return;
+	}
+	m_Account.authID=m_Account.username;
+	m_Account.server=m_Account.domain;
+	m_Account.proxy=m_Account.domain;
 '@
-if (-not $cpp.Contains($oldSave)) { throw 'AccountDlg save block not found' }
-$cpp = $cpp.Replace($oldSave, $newSave)
-Set-Content -Path $cppPath -Value $cpp -Encoding utf8
+if ($cpp -match $oldSavePattern) { $cpp = [regex]::Replace($cpp, $oldSavePattern, $newSave, 1) }
+else { throw 'AccountDlg save block not found' }
 
+Set-Content -Path $cppPath -Value $cpp -Encoding utf8
 Write-Host 'BD PBX account dialog layout and Save handling applied successfully.'

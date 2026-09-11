@@ -255,65 +255,37 @@ jobs:
         Write-Host "PJSIP headers and libraries copied successfully"
 
     - name: Prepare PJSIP Static Library
-      shell: pwsh
-      run: |
-        Set-Location "${{ github.workspace }}"
-
-        Write-Host "Preparing combined PJSIP static library..."
-
-        $root = Split-Path $env:GITHUB_WORKSPACE -Parent
-        $pjRoot = Join-Path $root "pjproject"
-        $libDir = Join-Path $root "lib"
-
-        New-Item -ItemType Directory -Force -Path $libDir | Out-Null
-
-        $names = @(
-          "pjlib-i386-Win32-vc14-Release.lib",
-          "pjnath-i386-Win32-vc14-Release.lib",
-          "pjsip-simple-i386-Win32-vc14-Release.lib",
-          "pjsua-lib-i386-Win32-vc14-Release.lib"
-        )
-
-        Write-Host "Searching under: $pjRoot"
-
-        $existing = @()
-
-        foreach ($name in $names) {
-          $match = Get-ChildItem -Path $pjRoot -Recurse -Filter $name -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($match) {
-            $existing += $match.FullName
-            Write-Host "FOUND: $($match.FullName)"
-          } else {
-            Write-Host "NOT FOUND: $name"
-          }
-        }
-
-        if ($existing.Count -eq 0) {
-          Write-Host "ERROR: No PJSIP libraries found"
-          Write-Host "Searching all .lib files under pjproject..."
-          Get-ChildItem -Path $pjRoot -Recurse -Filter "*.lib" -File -ErrorAction SilentlyContinue | Select-Object -First 100 | ForEach-Object { Write-Host $_.FullName }
-          exit 1
-        }
-
-        Write-Host "PJSIP libraries found: $($existing.Count)"
-
-        $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
-
-        Write-Host "Creating combined library..."
-        $libExe = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC" -Recurse -Filter "lib.exe" | Where-Object { $_.FullName -match "\\HostX86\\x86\\" } | Select-Object -First 1; if (-not $libExe) { Write-Host "ERROR: lib.exe not found"; exit 1 }; Write-Host "Using lib.exe: $($libExe.FullName)"; & .FullName $libExe.FullName "/OUT:$target" $existing
-
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "ERROR: Failed to create combined PJSIP library"
-          exit $LASTEXITCODE
-        }
-
-        if (-not (Test-Path $target)) {
-          Write-Host "ERROR: Combined PJSIP library was not created"
-          exit 1
-        }
-
-        Write-Host "Combined PJSIP library ready:"
-        Write-Host $target
+- name: Prepare PJSIP Static Library
+  shell: pwsh
+  run: |
+    Set-Location "${{ github.workspace }}"
+    Write-Host "Preparing combined PJSIP static library..."
+    $root = Split-Path $env:GITHUB_WORKSPACE -Parent
+    $pjRoot = Join-Path $root "pjproject"
+    $libDir = Join-Path $root "lib"
+    New-Item -ItemType Directory -Force -Path $libDir | Out-Null
+    $names = @("pjlib-i386-Win32-vc14-Release.lib","pjnath-i386-Win32-vc14-Release.lib","pjsip-simple-i386-Win32-vc14-Release.lib","pjsua-lib-i386-Win32-vc14-Release.lib")
+    $existing = @()
+    foreach ($name in $names) {
+      $match = Get-ChildItem -Path $pjRoot -Recurse -Filter $name -File -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($match) {
+        $existing += $match.FullName
+        Write-Host "FOUND: $($match.FullName)"
+      } else {
+        Write-Host "NOT FOUND: $name"
+        exit 1
+      }
+    }
+    $msvcRoot = "C:Program FilesMicrosoft Visual Studio2022EnterpriseVCToolsMSVC"
+    $libExe = Get-ChildItem -Path $msvcRoot -Directory | Sort-Object Name -Descending | ForEach-Object { Join-Path $_.FullName "binHostX86†lib.exe" } | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $libExe) { Write-Host "ERROR: lib.exe not found"; exit 1 }
+    $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
+    Write-Host "Using lib.exe: $libExe"
+    Write-Host "Creating: $target"
+    & $libExe "/OUT:$target" $existing
+    if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: lib.exe failed with exit code $LASTEXITCODE"; exit $LASTEXITCODE }
+    if (-not (Test-Path $target)) { Write-Host "ERROR: Combined PJSIP library was not created"; exit 1 }
+    Write-Host "Combined PJSIP library created successfully: $target"
 
     - name: Build BD PBX Connect
 

@@ -216,8 +216,8 @@ jobs:
           }
           & $iscc.Source "installer\BDPBXConnect.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path "installer-output\BDPBXConnect-Setup.exe")) { throw "Installer was not created" }
-          Write-Host "Windows installer ready: installer-output\BDPBXConnect-Setup.exe"
+          if (-not (Test-Path "installer-output\BDPBX-Setup.exe")) { throw "Installer was not created" }
+          Write-Host "Windows installer ready: installer-output\BDPBX-Setup.exe"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -225,4 +225,4 @@ jobs:
           name: BDPBXConnect-Windows
           path: |
             output/
-            installer-output/BDPBXConnect-Setup.exe
+            installer-output/BDPBX-Setup.exe

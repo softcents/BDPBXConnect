@@ -64,9 +64,9 @@ jobs:
           $opusInclude = Join-Path $env:GITHUB_WORKSPACE "opus-src\include"
           $pjOpusInclude = Join-Path $pjRoot "third_party\opus"
           New-Item -ItemType Directory -Force -Path $pjOpusInclude | Out-Null
-          Copy-Item (Join-Path $opusInclude "opus") $pjOpusInclude -Recurse -Force
-          if (-not (Test-Path (Join-Path $pjOpusInclude "opus\opus.h"))) { throw "PJSIP Opus header was not copied" }
-          Write-Host "PJSIP Opus header ready: $(Join-Path $pjOpusInclude 'opus\opus.h')"
+          Copy-Item (Join-Path $opusInclude "*") $pjOpusInclude -Recurse -Force
+          if (-not (Test-Path (Join-Path $pjOpusInclude "opus.h"))) { throw "PJSIP Opus header was not copied" }
+          Write-Host "PJSIP Opus header ready: $(Join-Path $pjOpusInclude 'opus.h')"
           Set-Location $pjRoot
           $configLines = @(
             '/* BDPBXConnect PJSIP configuration */',

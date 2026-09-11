@@ -74,8 +74,13 @@ Set-Content -Path $dialogPath -Value $dialog -Encoding utf8
 $cppPath = Join-Path $env:GITHUB_WORKSPACE 'AccountDlg.cpp'
 $cpp = Get-Content -Raw -Path $cppPath
 
+$initReplacement = @"
+CDialog::OnInitDialog();
+
+`tSetWindowText(_T("BD PBX - Add Account"));
+"@
 if ($cpp -notmatch 'SetWindowText\(_T\("BD PBX - Add Account"\)\)') {
-    $cpp = [regex]::Replace($cpp, 'CDialog::OnInitDialog\(\);', "CDialog::OnInitDialog();`r`n`r`n`tSetWindowText(_T(\"BD PBX - Add Account\"));", 1)
+    $cpp = $cpp.Replace('CDialog::OnInitDialog();', $initReplacement.TrimEnd())
 }
 
 $cpp = [regex]::Replace($cpp, '(?s)\tGetDlgItem\(IDC_ACCOUNT_REQUIRED_USERNAME\)->ShowWindow\(show\);\r?\n\tGetDlgItem\(IDC_ACCOUNT_REQUIRED_DOMAIN\)->ShowWindow\(show\);\r?\n\tGetDlgItem\(IDC_EDIT_SERVER\)->EnableWindow\(id\);', '', 1)
@@ -135,9 +140,6 @@ $newSave = @'
 if ($cpp -match $oldSavePattern) { $cpp = [regex]::Replace($cpp, $oldSavePattern, $newSave, 1) }
 else { throw 'AccountDlg save block not found' }
 
-# Guard against accidental variable-name corruption in generated C++.
-$cpp = $cpp.Replace("`t edt = (CEdit*)", "`tedit = (CEdit*)")
 $cpp = $cpp.Replace("`tedt = (CEdit*)", "`tedit = (CEdit*)")
-
 Set-Content -Path $cppPath -Value $cpp -Encoding utf8
 Write-Host 'BD PBX account dialog layout and Save handling applied successfully.'

@@ -73,7 +73,7 @@ Set-Content -Path $dialogPath -Value $dialog -Encoding utf8
 
 $cppPath = Join-Path $env:GITHUB_WORKSPACE 'AccountDlg.cpp'
 $cpp = Get-Content -Raw -Path $cppPath
-$cpp = $cpp.Replace('CDialog::OnInitDialog();', 'CDialog::OnInitDialog();`r`n`r`n`tSetWindowText(_T("BD PBX - Add Account"));')
+$cpp = $cpp.Replace('CDialog::OnInitDialog();', "CDialog::OnInitDialog();`r`n`r`n`tSetWindowText(_T(\"BD PBX - Add Account\"));")
 $cpp = $cpp.Replace("`tGetDlgItem(IDC_ACCOUNT_REQUIRED_USERNAME)->ShowWindow(show);`r`n`tGetDlgItem(IDC_ACCOUNT_REQUIRED_DOMAIN)->ShowWindow(show);`r`n`tGetDlgItem(IDC_EDIT_SERVER)->EnableWindow(id);", '')
 
 $oldLoad = @'

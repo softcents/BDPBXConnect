@@ -207,18 +207,18 @@ jobs:
                 Copy-Item $_.FullName -Destination "$libDest/" -Force -ErrorAction SilentlyContinue
             }
         # Copy PJSIP headers to locations expected by MicroSIP
-        Copy-Item "pjprojectpjlibinclude*" -Destination "pjlibinclude" -Recurse -Force
-        Copy-Item "pjprojectpjlib-utilinclude*" -Destination "pjlib-utilinclude" -Recurse -Force
-        Copy-Item "pjprojectpjnathinclude*" -Destination "pjnathinclude" -Recurse -Force
-        Copy-Item "pjprojectpjmediainclude*" -Destination "pjmediainclude" -Recurse -Force
-        Copy-Item "pjprojectpjsipinclude*" -Destination "pjsipinclude" -Recurse -Force
+        Copy-Item "pjproject\pjlib\include\*" -Destination "pjlib\include" -Recurse -Force
+        Copy-Item "pjproject\pjlib-util\include\*" -Destination "pjlib-util\include" -Recurse -Force
+        Copy-Item "pjproject\pjnath\include\*" -Destination "pjnath\include" -Recurse -Force
+        Copy-Item "pjproject\pjmedia\include\*" -Destination "pjmedia\include" -Recurse -Force
+        Copy-Item "pjproject\pjsip\include\*" -Destination "pjsip\include" -Recurse -Force
 
         # Verify critical PJSIP header
-        if (Test-Path "pjsipincludepjsua-libpjsua.h") {
+        if (Test-Path "pjsip\include\pjsua-lib\pjsua.h") {
             Write-Host "Verified: pjsua-lib/pjsua.h"
         } else {
             Write-Host "ERROR: pjsua-lib/pjsua.h was not found"
-            Get-ChildItem "pjprojectpjsipinclude" -Recurse -Filter "pjsua.h" | ForEach-Object { Write-Host $_.FullName }
+            Get-ChildItem "pjproject\pjsip\include" -Recurse -Filter "pjsua.h" | ForEach-Object { Write-Host $_.FullName }
             exit 1
         }
 

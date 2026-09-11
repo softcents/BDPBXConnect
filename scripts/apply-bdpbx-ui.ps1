@@ -9,7 +9,6 @@ $logoIco = Join-Path $env:GITHUB_WORKSPACE 'res\bdpbx.ico'
 if (-not (Test-Path $logoB64)) { throw 'BD PBX logo asset was not found' }
 $pngBytes = [Convert]::FromBase64String((Get-Content -Raw -Path $logoB64).Trim())
 [System.IO.File]::WriteAllBytes($logoPng, $pngBytes)
-
 $icoHeader = [byte[]](0,0,1,0,1,0)
 $entry = New-Object byte[] 16
 $entry[0] = 64
@@ -24,8 +23,10 @@ $ico = New-Object byte[] ($icoHeader.Length + $entry.Length + $pngBytes.Length)
 [Array]::Copy($pngBytes, 0, $ico, 22, $pngBytes.Length)
 [System.IO.File]::WriteAllBytes($logoIco, $ico)
 if (-not (Test-Path $logoIco)) { throw 'BD PBX ICO was not created' }
-Write-Host "BD PBX logo ready: $logoIco"
 
+# Compact BD PBX account dialog. Only controls that exist in this resource are
+# used by AccountDlg.cpp; the old server/proxy/auth/register controls are not
+# touched by the dialog code anymore, preventing null-control crashes.
 $dialogPath = Join-Path $env:GITHUB_WORKSPACE 'res\dialog.rc2'
 $dialog = Get-Content -Raw -Path $dialogPath
 $marker = '//-----------------------------ACCOUNT------------------------------------------'
@@ -35,7 +36,6 @@ if ($start -lt 0 -or $next -lt 0) { throw 'BD PBX account dialog section was not
 $end = $dialog.IndexOf('//-----------------------------------------------------------------------', $next + 1)
 if ($end -lt 0) { throw 'BD PBX account dialog end marker was not found' }
 
-# Compact account dialog: keep all important fields, but make the window fit normal 768px-height screens.
 $accountSection = @'
 //-----------------------------ACCOUNT------------------------------------------
 #define IDD_ACCOUNT_OFF_FINAL 300
@@ -100,19 +100,39 @@ Set-Content -Path $dialogPath -Value $dialog -Encoding utf8
 $cppPath = Join-Path $env:GITHUB_WORKSPACE 'AccountDlg.cpp'
 $cpp = Get-Content -Raw -Path $cppPath
 
-$initReplacement = @"
-CDialog::OnInitDialog();
-
-`tSetWindowText(_T("BD PBX - Add Account"));
-"@
+# Keep the BD PBX title independent of the original MicroSIP title.
 if ($cpp -notmatch 'SetWindowText\(_T\("BD PBX - Add Account"\)\)') {
-    $cpp = $cpp.Replace('CDialog::OnInitDialog();', $initReplacement.TrimEnd())
+    $cpp = $cpp.Replace('CDialog::OnInitDialog();', 'CDialog::OnInitDialog();\r\n\r\n\tSetWindowText(_T("BD PBX - Add Account"));', 1)
 }
 
-$cpp = [regex]::Replace($cpp, '(?s)\tGetDlgItem\(IDC_ACCOUNT_REQUIRED_USERNAME\)->ShowWindow\(show\);\r?\n\tGetDlgItem\(IDC_ACCOUNT_REQUIRED_DOMAIN\)->ShowWindow\(show\);\r?\n\tGetDlgItem\(IDC_EDIT_SERVER\)->EnableWindow\(id\);', '', 1)
+# Replace the complete Load/Save implementations so no code dereferences
+# controls that were removed from the redesigned dialog.
+$loadPattern = '(?s)void AccountDlg::Load\(int id\)\s*\{.*?\n\}\s*\n\s*void AccountDlg::OnBnClickedOk\(\)'
+$loadAndStartSave = @'
+void AccountDlg::Load(int id)
+{
+	CEdit* edit;
+	CComboBox* combobox;
+	CString str;
+	int i;
+	int n;
+	bool found;
 
-$oldLoadPattern = '(?s)\tedit = \(CEdit\*\)GetDlgItem\(IDC_ACCOUNT_LABEL\);.*?\tedit->SetWindowText\(m_Account\.username\);\r?\n'
-$newLoad = @'
+	accountId = id;
+	if (accountSettings.AccountLoad(id, &m_Account)) {
+		accountId = id;
+		if (accountId && accountSettings.accountId == accountId && !accountSettings.account.rememberPassword) {
+			m_Account.username = accountSettings.account.username;
+			m_Account.password = accountSettings.account.password;
+			m_Account.rememberPassword = false;
+		}
+	}
+	else {
+		accountId = -1;
+	}
+
+	bool isEdit = (accountId > 0 && (!m_Account.username.IsEmpty() || accountId > 1));
+
 	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_LABEL);
 	if (m_Account.label.IsEmpty()) {
 		m_Account.label = _T("Account 1");
@@ -129,12 +149,79 @@ $newLoad = @'
 
 	edit = (CEdit*)GetDlgItem(IDC_EDIT_USERNAME);
 	edit->SetWindowText(m_Account.username);
-'@
-if ($cpp -match $oldLoadPattern) { $cpp = [regex]::Replace($cpp, $oldLoadPattern, $newLoad, 1) }
-else { throw 'AccountDlg Load block not found' }
 
-$oldSavePattern = '(?s)\tedit = \(CEdit\*\)GetDlgItem\(IDC_EDIT_SERVER\);.*?\tm_Account\.username=str\.Trim\(\);\r?\n'
-$newSave = @'
+	edit = (CEdit*)GetDlgItem(IDC_EDIT_PASSWORD);
+	if (accountId == -1 || m_Account.password.IsEmpty()) {
+		GetDlgItem(IDC_SYSLINK_DISPLAY_PASSWORD)->ShowWindow(SW_SHOW);
+	}
+	else {
+		GetDlgItem(IDC_SYSLINK_DISPLAY_PASSWORD)->ShowWindow(SW_HIDE);
+	}
+	edit->SetPasswordChar('*');
+	edit->SetWindowText(m_Account.password);
+
+	edit = (CEdit*)GetDlgItem(IDC_EDIT_DISPLAYNAME);
+	edit->SetWindowText(m_Account.displayName);
+	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_DIALING_PREFIX);
+	edit->SetWindowText(m_Account.dialingPrefix);
+	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_DIAL_PLAN);
+	edit->SetWindowText(m_Account.dialPlan);
+	((CButton*)GetDlgItem(IDC_ACCOUNT_HIDE_CID))->SetCheck(m_Account.hideCID);
+	edit = (CEdit*)GetDlgItem(IDC_EDIT_VOICEMAIL);
+	edit->SetWindowText(m_Account.voicemailNumber);
+
+	combobox = (CComboBox*)GetDlgItem(IDC_SRTP);
+	if (m_Account.srtp == _T("optional")) i = 1;
+	else if (m_Account.srtp == _T("mandatory")) i = 2;
+	else if (m_Account.srtp == _T("dtls-sdes")) i = 3;
+	else if (m_Account.srtp == _T("dtls")) i = 4;
+	else i = 0;
+	combobox->SetCurSel(i);
+
+	combobox = (CComboBox*)GetDlgItem(IDC_TRANSPORT);
+	n = sizeof(transportItems) / sizeof(transportItems[0]);
+	found = false;
+	for (i = 0; i < n; i++) {
+		if (m_Account.transport == transportItems[i]) {
+			combobox->SetCurSel(i);
+			found = true;
+			break;
+		}
+	}
+	if (!found) combobox->SetCurSel(0);
+
+	combobox = (CComboBox*)GetDlgItem(IDC_PUBLIC_ADDR);
+	if (combobox->IsWindowEnabled()) {
+		str = get_public_addr(&m_Account);
+		if (!str.IsEmpty()) combobox->SetWindowText(str);
+	}
+
+	((CButton*)GetDlgItem(IDC_PUBLISH))->SetCheck(m_Account.publish);
+	((CButton*)GetDlgItem(IDC_REWRITE))->SetCheck(m_Account.allowRewrite);
+	((CButton*)GetDlgItem(IDC_ICE))->SetCheck(m_Account.ice);
+	((CButton*)GetDlgItem(IDC_SESSION_TIMER))->SetCheck(m_Account.disableSessionTimer);
+	GetDlgItem(IDC_SYSLINK_ACCOUNT_DELETE)->ShowWindow(isEdit ? SW_SHOW : SW_HIDE);
+}
+
+void AccountDlg::OnBnClickedOk()
+'@
+if ($cpp -notmatch $loadPattern) { throw 'AccountDlg Load/Save boundary not found' }
+$cpp = [regex]::Replace($cpp, $loadPattern, $loadAndStartSave, 1)
+
+$savePattern = '(?s)void AccountDlg::OnBnClickedOk\(\)\s*\{.*?\n\}\s*\n\s*void AccountDlg::OnNMClickSyslinkSipServer'
+$safeSave = @'
+void AccountDlg::OnBnClickedOk()
+{
+	CEdit* edit;
+	CComboBox* combobox;
+	CString str;
+	int i;
+
+	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_LABEL);
+	edit->GetWindowText(str);
+	m_Account.label = str.Trim();
+	if (m_Account.label.IsEmpty()) m_Account.label = _T("Account 1");
+
 	edit = (CEdit*)GetDlgItem(IDC_EDIT_DOMAIN);
 	edit->GetWindowText(str);
 	str = str.Trim();
@@ -150,22 +237,101 @@ $newSave = @'
 		return;
 	}
 	m_Account.domain = str + tenantSuffix;
+	m_Account.server = m_Account.domain;
+	m_Account.proxy = m_Account.domain;
 
 	edit = (CEdit*)GetDlgItem(IDC_EDIT_USERNAME);
 	edit->GetWindowText(str);
-	m_Account.username=str.Trim();
+	m_Account.username = str.Trim();
 	if (m_Account.username.IsEmpty()) {
 		AfxMessageBox(_T("Please enter your SIP username."));
 		GetDlgItem(IDC_EDIT_USERNAME)->SetFocus();
 		return;
 	}
-	m_Account.authID=m_Account.username;
-	m_Account.server=m_Account.domain;
-	m_Account.proxy=m_Account.domain;
-'@
-if ($cpp -match $oldSavePattern) { $cpp = [regex]::Replace($cpp, $oldSavePattern, $newSave, 1) }
-else { throw 'AccountDlg save block not found' }
+	m_Account.authID = m_Account.username;
 
-$cpp = $cpp.Replace("`tedt = (CEdit*)", "`tedit = (CEdit*)")
+	edit = (CEdit*)GetDlgItem(IDC_EDIT_PASSWORD);
+	edit->GetWindowText(str);
+	m_Account.password = str.Trim();
+
+	edit = (CEdit*)GetDlgItem(IDC_EDIT_DISPLAYNAME);
+	edit->GetWindowText(str);
+	m_Account.displayName = str.Trim();
+	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_DIALING_PREFIX);
+	edit->GetWindowText(str);
+	m_Account.dialingPrefix = str.Trim();
+	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_DIAL_PLAN);
+	edit->GetWindowText(str);
+	m_Account.dialPlan = str.Trim();
+	m_Account.hideCID = ((CButton*)GetDlgItem(IDC_ACCOUNT_HIDE_CID))->GetCheck();
+	edit = (CEdit*)GetDlgItem(IDC_EDIT_VOICEMAIL);
+	edit->GetWindowText(str);
+	m_Account.voicemailNumber = str.Trim();
+
+	combobox = (CComboBox*)GetDlgItem(IDC_SRTP);
+	i = combobox->GetCurSel();
+	if (i == 1) m_Account.srtp = _T("optional");
+	else if (i == 2) m_Account.srtp = _T("mandatory");
+	else if (i == 3) m_Account.srtp = _T("dtls-sdes");
+	else if (i == 4) m_Account.srtp = _T("dtls");
+	else m_Account.srtp = _T("");
+
+	combobox = (CComboBox*)GetDlgItem(IDC_TRANSPORT);
+	i = combobox->GetCurSel();
+	if (i < 0 || i >= (int)(sizeof(transportItems) / sizeof(transportItems[0]))) i = 0;
+	m_Account.transport = transportItems[i];
+
+	combobox = (CComboBox*)GetDlgItem(IDC_PUBLIC_ADDR);
+	if (combobox->IsWindowEnabled()) {
+		combobox->GetWindowText(m_Account.publicAddr);
+		if (m_Account.publicAddr == Translate(_T("Auto"))) m_Account.publicAddr = _T("");
+	}
+
+	m_Account.rememberPassword = 1;
+	if (m_Account.registerRefresh <= 0) m_Account.registerRefresh = PJSUA_REG_INTERVAL;
+	if (m_Account.keepAlive < 0) m_Account.keepAlive = 15;
+	m_Account.publish = ((CButton*)GetDlgItem(IDC_PUBLISH))->GetCheck();
+	m_Account.allowRewrite = ((CButton*)GetDlgItem(IDC_REWRITE))->GetCheck();
+	m_Account.ice = ((CButton*)GetDlgItem(IDC_ICE))->GetCheck();
+	m_Account.disableSessionTimer = ((CButton*)GetDlgItem(IDC_SESSION_TIMER))->GetCheck();
+
+	this->ShowWindow(SW_HIDE);
+	mainDlg->accountDlg = NULL;
+	if (accountId == -1) {
+		Account dummy;
+		int newId = 1;
+		while (accountSettings.AccountLoad(newId, &dummy)) newId++;
+		accountId = newId;
+	}
+	accountSettings.AccountSave(accountId, &m_Account);
+
+	if (accountId) {
+		mainDlg->PJAccountDelete(true);
+		accountSettings.accountId = accountId;
+		accountSettings.account = m_Account;
+		accountSettings.AccountLoad(accountSettings.accountId, &accountSettings.account);
+		if (!m_Account.rememberPassword) {
+			accountSettings.account.username = m_Account.username;
+			accountSettings.account.password = m_Account.password;
+			accountSettings.account.rememberPassword = false;
+		}
+		mainDlg->OnAccountChanged();
+		mainDlg->InitUI();
+		accountSettings.SettingsSave();
+		mainDlg->PJAccountAdd();
+	}
+	else {
+		mainDlg->PJAccountDeleteLocal();
+		accountSettings.AccountLoad(0, &accountSettings.accountLocal);
+		mainDlg->PJAccountAddLocal();
+	}
+	OnClose();
+}
+
+void AccountDlg::OnNMClickSyslinkSipServer
+'@
+if ($cpp -notmatch $savePattern) { throw 'AccountDlg OnBnClickedOk boundary not found' }
+$cpp = [regex]::Replace($cpp, $savePattern, $safeSave, 1)
+
 Set-Content -Path $cppPath -Value $cpp -Encoding utf8
-Write-Host 'BD PBX account dialog resized to a compact, screen-safe layout.'
+Write-Host 'BD PBX account dialog runtime crash fix applied: no removed controls are dereferenced.'

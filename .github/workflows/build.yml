@@ -87,10 +87,6 @@ jobs:
             '#endif'
           )
           Set-Content -Path "pjlib\include\pj\config_site.h" -Value $configLines
-
-          # PJSIP projects import shared .props files which can override the
-          # project RuntimeLibrary setting. Replace the runtime setting in
-          # BOTH vcxproj and props files so every object is built with /MT.
           Get-ChildItem -Path . -Recurse -File | Where-Object { $_.Extension -in @('.vcxproj','.props') } | ForEach-Object {
             $p = $_.FullName
             $text = Get-Content -Raw -Path $p
@@ -98,7 +94,6 @@ jobs:
             $text = $text -replace '<RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
             Set-Content -Path $p -Value $text
           }
-
           $projects = @(
             "pjlib/build/pjlib.vcxproj",
             "pjlib-util/build/pjlib_util.vcxproj",
@@ -152,17 +147,28 @@ jobs:
           if (-not $libExe) { throw "lib.exe not found" }
           $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
           Write-Host "Using lib.exe: $($libExe.FullName)"
-          Write-Host "Creating: $target"
           & $libExe.FullName "/OUT:$target" $existing
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path $target)) { throw "Combined PJSIP library was not created" }
           Write-Host "Combined PJSIP library ready: $target"
 
+      - name: Configure PJSIP Link Dependencies
+        shell: pwsh
+        run: |
+          $proj = Join-Path $env:GITHUB_WORKSPACE "BDPBXConnect.vcxproj"
+          $text = Get-Content -Raw -Path $proj
+          $needle = '<AdditionalDependencies>opus.lib;Wtsapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>'
+          $replacement = '<AdditionalDependencies>opus.lib;Wtsapi32.lib;libpjproject-i386-Win32-vc14-Release-Static.lib;%(AdditionalDependencies)</AdditionalDependencies>'
+          if (-not $text.Contains($needle)) { throw "Expected linker dependency entry not found" }
+          $text = $text.Replace($needle, $replacement)
+          Set-Content -Path $proj -Value $text
+          Write-Host "PJSIP aggregate library added to BDPBXConnect linker inputs"
+
       - name: Build BD PBX Connect
         working-directory: ${{ github.workspace }}
         shell: pwsh
         run: |
-          & msbuild BDPBXConnect.vcxproj /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=${{ env.BUILD_PLATFORM }} /p:PlatformToolset=v143 /p:RuntimeLibrary=MultiThreaded /p:UseEnv=false /p:AdditionalDependencies="opus.lib;Wtsapi32.lib;libpjproject-i386-Win32-vc14-Release-Static.lib;%(AdditionalDependencies)" /m
+          & msbuild BDPBXConnect.vcxproj /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=${{ env.BUILD_PLATFORM }} /p:PlatformToolset=v143 /p:RuntimeLibrary=MultiThreaded /p:UseEnv=false /m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host "BD PBX Connect build completed successfully"
 

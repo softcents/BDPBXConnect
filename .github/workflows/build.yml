@@ -199,8 +199,30 @@ jobs:
           if (Test-Path "Release\BDPBXConnect.exe") { Copy-Item "Release\BDPBXConnect.exe" "output\" -Force } else { throw "BDPBXConnect.exe not found" }
           Get-ChildItem "Release" -Filter "*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination "output\" -Force
 
+      - name: Build Windows Installer
+        shell: pwsh
+        run: |
+          Set-Location "${{ github.workspace }}"
+          New-Item -ItemType Directory -Force -Path installer-output | Out-Null
+          $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+          if (-not $iscc) {
+            $candidates = @(
+              "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+              "C:\Program Files\Inno Setup 6\ISCC.exe"
+            )
+            $isccPath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if (-not $isccPath) { throw "Inno Setup compiler (ISCC.exe) not found" }
+            $iscc = @{ Source = $isccPath }
+          }
+          & $iscc.Source "installer\BDPBXConnect.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "installer-output\BDPBXConnect-Setup.exe")) { throw "Installer was not created" }
+          Write-Host "Windows installer ready: installer-output\BDPBXConnect-Setup.exe"
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: BDPBXConnect-Windows
-          path: output/
+          path: |
+            output/
+            installer-output/BDPBXConnect-Setup.exe

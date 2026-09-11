@@ -50,7 +50,7 @@ jobs:
         if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: Opus build failed"; exit $LASTEXITCODE }
         $opusLib = Get-ChildItem "opus-build" -Recurse -Filter "opus.lib" | Select-Object -First 1
         if (-not $opusLib) { Write-Host "ERROR: opus.lib not found"; Get-ChildItem "opus-build" -Recurse -File | Select-Object -First 100 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
-        $dest = "${{ github.workspace }}..	hird_partyopusWin32"
+        $dest = Join-Path (Join-Path "${{ github.workspace }}" "..") "third_party/opus/Win32"
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
         Copy-Item $opusLib.FullName "$dest\opus.lib" -Force
         if (-not (Test-Path "$dest\opus.lib")) { Write-Host "ERROR: opus.lib copy failed"; exit 1 }

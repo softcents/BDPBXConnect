@@ -21,6 +21,15 @@ jobs:
         shell: pwsh
         run: ./scripts/apply-bdpbx-ui.ps1
 
+      - name: Normalize generated AccountDlg.cpp
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:GITHUB_WORKSPACE "AccountDlg.cpp"
+          $text = Get-Content -Raw -Path $path
+          $text = $text.Replace('CDialog::OnInitDialog();\r\n\r\n\tSetWindowText(_T("BD PBX - Add Account"));', "CDialog::OnInitDialog();`r`n`r`n`tSetWindowText(_T(\"BD PBX - Add Account\"));")
+          Set-Content -Path $path -Value $text -Encoding utf8
+          if ($text.Contains('CDialog::OnInitDialog();\r\n')) { Write-Host "AccountDlg.cpp line endings normalized" }
+
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v3
         with:
@@ -78,7 +87,7 @@ jobs:
             '#ifndef __PJ_CONFIG_SITE_H__',
             '#define __PJ_CONFIG_SITE_H__',
             '#define PJ_CONFIG_MICROSIP 1',
-            '#define PJMEDIA_HAS_VIDEO 1',
+            '#define PJMEDIA_HAS_VIDEO 0',
             '#define PJMEDIA_HAS_FFMPEG 0',
             '#define PJMEDIA_HAS_VPX 0',
             '#define PJMEDIA_HAS_OPUS 1',

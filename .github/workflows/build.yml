@@ -258,33 +258,49 @@ jobs:
       shell: pwsh
       run: |
         Set-Location "${{ github.workspace }}"
-        Set-Location ".."
 
         Write-Host "Preparing combined PJSIP static library..."
 
-        $libDir = "${{ github.workspace }}..lib"
+        $root = Split-Path $env:GITHUB_WORKSPACE -Parent
+        $pjRoot = Join-Path $root "pjproject"
+        $libDir = Join-Path $root "lib"
+
         New-Item -ItemType Directory -Force -Path $libDir | Out-Null
 
-        $libs = @(
-          "pjprojectpjliblibpjlib-i386-Win32-vc14-Release.lib",
-          "pjprojectpjnathlibpjnath-i386-Win32-vc14-Release.lib",
-          "pjprojectpjsiplibpjsip-simple-i386-Win32-vc14-Release.lib",
-          "pjprojectpjsiplibpjsua-lib-i386-Win32-vc14-Release.lib"
+        $names = @(
+          "pjlib-i386-Win32-vc14-Release.lib",
+          "pjnath-i386-Win32-vc14-Release.lib",
+          "pjsip-simple-i386-Win32-vc14-Release.lib",
+          "pjsua-lib-i386-Win32-vc14-Release.lib"
         )
 
-        $existing = @($libs | Where-Object { Test-Path $_ })
+        Write-Host "Searching under: $pjRoot"
+
+        $existing = @()
+
+        foreach ($name in $names) {
+          $match = Get-ChildItem -Path $pjRoot -Recurse -Filter $name -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($match) {
+            $existing += $match.FullName
+            Write-Host "FOUND: $($match.FullName)"
+          } else {
+            Write-Host "NOT FOUND: $name"
+          }
+        }
 
         if ($existing.Count -eq 0) {
           Write-Host "ERROR: No PJSIP libraries found"
+          Write-Host "Searching all .lib files under pjproject..."
+          Get-ChildItem -Path $pjRoot -Recurse -Filter "*.lib" -File -ErrorAction SilentlyContinue | Select-Object -First 100 | ForEach-Object { Write-Host $_.FullName }
           exit 1
         }
 
-        Write-Host "Libraries found:"
-        $existing | ForEach-Object { Write-Host $_ }
+        Write-Host "PJSIP libraries found: $($existing.Count)"
 
         $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
 
-        lib /OUT:"$target" $existing
+        Write-Host "Creating combined library..."
+        & lib.exe "/OUT:$target" $existing
 
         if ($LASTEXITCODE -ne 0) {
           Write-Host "ERROR: Failed to create combined PJSIP library"
@@ -300,6 +316,7 @@ jobs:
         Write-Host $target
 
     - name: Build BD PBX Connect
+
       working-directory: ${{ github.workspace }}
       shell: pwsh
       run: |

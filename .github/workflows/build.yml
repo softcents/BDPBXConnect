@@ -50,6 +50,14 @@ jobs:
           Copy-Item $opusLib.FullName (Join-Path $dest "opus.lib") -Force
           Write-Host "Opus ready: $(Join-Path $dest 'opus.lib')"
 
+          # Make Opus headers available to PJSIP's existing ../../third_party include path.
+          $pjRoot = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) "pjproject"
+          $pjOpusInclude = Join-Path $pjRoot "third_party\opus"
+          New-Item -ItemType Directory -Force -Path $pjOpusInclude | Out-Null
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE "opus-src\include\opus\*") $pjOpusInclude -Recurse -Force
+          if (-not (Test-Path (Join-Path $pjOpusInclude "opus.h"))) { throw "PJSIP Opus header was not copied" }
+          Write-Host "PJSIP Opus header ready: $(Join-Path $pjOpusInclude 'opus.h')"
+
       - name: Download and Build PJSIP
         shell: pwsh
         run: |

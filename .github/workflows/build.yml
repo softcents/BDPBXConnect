@@ -206,39 +206,27 @@ jobs:
                 Write-Host "Copying third_party lib: $($_.Name)"
                 Copy-Item $_.FullName -Destination "$libDest/" -Force -ErrorAction SilentlyContinue
             }
-        }
+        # Copy PJSIP headers to locations expected by MicroSIP
+        Copy-Item "pjprojectpjlibinclude*" -Destination "pjlibinclude" -Recurse -Force
+        Copy-Item "pjprojectpjlib-utilinclude*" -Destination "pjlib-utilinclude" -Recurse -Force
+        Copy-Item "pjprojectpjnathinclude*" -Destination "pjnathinclude" -Recurse -Force
+        Copy-Item "pjprojectpjmediainclude*" -Destination "pjmediainclude" -Recurse -Force
+        Copy-Item "pjprojectpjsipinclude*" -Destination "pjsipinclude" -Recurse -Force
 
         # Verify critical PJSIP header
-        if (Test-Path "pjsip/include/pjsua-lib/pjsua.h") {
+        if (Test-Path "pjsipincludepjsua-libpjsua.h") {
             Write-Host "Verified: pjsua-lib/pjsua.h"
         } else {
             Write-Host "ERROR: pjsua-lib/pjsua.h was not found"
-            exit 1
-        }
-
-        # Copy PJSIP headers to locations expected by MicroSIP
-        $headerMappings = @(
-            @{ Source = "pjproject/pjlib/include/*"; Dest = "pjlib/include/" },
-            @{ Source = "pjproject/pjlib-util/include/*"; Dest = "pjlib-util/include/" },
-            @{ Source = "pjproject/pjnath/include/*"; Dest = "pjnath/include/" },
-            @{ Source = "pjproject/pjmedia/include/*"; Dest = "pjmedia/include/" },
-            @{ Source = "pjproject/pjsip/include/*"; Dest = "pjsip/include/" }
-        )
-        foreach ($m in $headerMappings) {
-            if (Test-Path $m.Source) {
-                Copy-Item $m.Source -Destination $m.Dest -Recurse -Force -ErrorAction SilentlyContinue
-            }
-        }
-
-        if (Test-Path "pjsip/include/pjsua-lib/pjsua.h") {
-            Write-Host "Verified: pjsua-lib/pjsua.h"
-        } else {
-            Write-Host "ERROR: pjsua-lib/pjsua.h was not found"
+            Get-ChildItem "pjprojectpjsipinclude" -Recurse -Filter "pjsua.h" | ForEach-Object { Write-Host $_.FullName }
             exit 1
         }
 
         # List what we have
         Write-Host "Libraries in lib/:"
+        Get-ChildItem -Path "$libDest/*.lib" -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "  $($_.Name)"
+        }
         Get-ChildItem -Path "$libDest/*.lib" -ErrorAction SilentlyContinue | ForEach-Object {
             Write-Host "  $($_.Name)"
         }

@@ -21,6 +21,12 @@ UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\BDPBXConnect.exe
 SetupIconFile=..\res\bdpbx.ico
 ArchitecturesInstallIn64BitMode=x64compatible
+; Seamless update: don't ask about an existing install directory.
+DirExistsWarning=no
+; Automatically close BD PBX when files are in use during an update.
+CloseApplications=force
+; Do not restart the old instance; [Run] starts the newly installed version.
+RestartApplications=no
 
 [Files]
 Source: "..\output\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

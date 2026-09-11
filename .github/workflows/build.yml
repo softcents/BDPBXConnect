@@ -188,48 +188,44 @@ jobs:
         Set-Location "${{ github.workspace }}"
         Set-Location ".."
 
-        Write-Host "Copying PJSIP libraries..."
+        Write-Host "Copying PJSIP libraries and headers..."
 
-        # Copy built libraries to expected locations
         $libSource = "pjproject"
         $libDest = "lib"
 
-        if (Test-Path $libSource) {
-            # Copy all .lib files from pjproject
-            Get-ChildItem -Path "$libSource\lib\*.lib" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-                Write-Host "Copying $($_.Name) to lib/"
-                Copy-Item $_.FullName -Destination "$libDest/" -Force -ErrorAction SilentlyContinue
-            }
+        if (-not (Test-Path $libSource)) {
+            Write-Host "ERROR: pjproject directory not found"
+            exit 1
+        }
 
-            # Also copy third_party libs
-            Get-ChildItem -Path "$libSource\third_party\lib\*.lib" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-                Write-Host "Copying third_party lib: $($_.Name)"
-                Copy-Item $_.FullName -Destination "$libDest/" -Force -ErrorAction SilentlyContinue
-            }
-        # Copy PJSIP headers to locations expected by MicroSIP
-        Copy-Item "pjproject\pjlib\include\*" -Destination "pjlib\include" -Recurse -Force
-        Copy-Item "pjproject\pjlib-util\include\*" -Destination "pjlib-util\include" -Recurse -Force
-        Copy-Item "pjproject\pjnath\include\*" -Destination "pjnath\include" -Recurse -Force
-        Copy-Item "pjproject\pjmedia\include\*" -Destination "pjmedia\include" -Recurse -Force
-        Copy-Item "pjproject\pjsip\include\*" -Destination "pjsip\include" -Recurse -Force
+        New-Item -ItemType Directory -Force -Path "lib" | Out-Null
+        New-Item -ItemType Directory -Force -Path "pjlib/include" | Out-Null
+        New-Item -ItemType Directory -Force -Path "pjlib-util/include" | Out-Null
+        New-Item -ItemType Directory -Force -Path "pjnath/include" | Out-Null
+        New-Item -ItemType Directory -Force -Path "pjmedia/include" | Out-Null
+        New-Item -ItemType Directory -Force -Path "pjsip/include" | Out-Null
 
-        # Verify critical PJSIP header
+        Get-ChildItem -Path "$libSource\lib\*.lib" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            Copy-Item $_.FullName -Destination "$libDest\" -Force
+        }
+
+        Copy-Item "pjproject\pjlib\include\*" -Destination "pjlib\include\" -Recurse -Force
+        Copy-Item "pjproject\pjlib-util\include\*" -Destination "pjlib-util\include\" -Recurse -Force
+        Copy-Item "pjproject\pjnath\include\*" -Destination "pjnath\include\" -Recurse -Force
+        Copy-Item "pjproject\pjmedia\include\*" -Destination "pjmedia\include\" -Recurse -Force
+        Copy-Item "pjproject\pjsip\include\*" -Destination "pjsip\include\" -Recurse -Force
+
         if (Test-Path "pjsip\include\pjsua-lib\pjsua.h") {
             Write-Host "Verified: pjsua-lib/pjsua.h"
         } else {
             Write-Host "ERROR: pjsua-lib/pjsua.h was not found"
-            Get-ChildItem "pjproject\pjsip\include" -Recurse -Filter "pjsua.h" | ForEach-Object { Write-Host $_.FullName }
+            Get-ChildItem "pjproject\pjsip\include" -Recurse -Filter "pjsua.h" | ForEach-Object {
+                Write-Host $_.FullName
+            }
             exit 1
         }
 
-        # List what we have
-        Write-Host "Libraries in lib/:"
-        Get-ChildItem -Path "$libDest/*.lib" -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Host "  $($_.Name)"
-        }
-        Get-ChildItem -Path "$libDest/*.lib" -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Host "  $($_.Name)"
-        }
+        Write-Host "PJSIP headers and libraries copied successfully"
 
     - name: Build BD PBX Connect
       working-directory: ${{ github.workspace }}

@@ -4,7 +4,7 @@
 #define MyAppExeName "BDPBXConnect.exe"
 
 [Setup]
-AppId={{7B4B2A3C-0F6D-4D70-A8A5-BDPBXCONNECT01}
+AppId={{7B4B2A3C-0F6D-4D70-A8A5-123456789001}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}

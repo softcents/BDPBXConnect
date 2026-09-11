@@ -14,472 +14,155 @@ env:
 jobs:
   build:
     runs-on: windows-2022
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v3
-      with:
-        msbuild-architecture: x86
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v3
+        with:
+          msbuild-architecture: x86
 
-    - name: Install Dependencies
-      shell: pwsh
-      run: |
-        choco install 7zip -y
-        choco install innosetup -y
+      - name: Install Dependencies
+        shell: pwsh
+        run: |
+          choco install 7zip -y
+          choco install innosetup -y
 
-    - name: Setup Opus
-      shell: pwsh
-      run: |
-        Set-Location "${{ github.workspace }}"
-        Write-Host "Downloading Opus..."
-        $opusUrl = "https://github.com/xiph/opus/archive/refs/tags/v1.5.2.zip"
-        Invoke-WebRequest -Uri $opusUrl -OutFile "opus.zip"
-        if (Test-Path "opus-src") { Remove-Item "opus-src" -Recurse -Force }
-        Expand-Archive -Path "opus.zip" -DestinationPath "." -Force
-        $opusDir = Get-ChildItem -Directory | Where-Object { $_.Name -like "opus-1.5.2*" } | Select-Object -First 1
-        if (-not $opusDir) { Write-Host "ERROR: Opus source not found"; exit 1 }
-        Rename-Item $opusDir.FullName "opus-src"
-        Write-Host "Configuring Opus..."
-        if (Test-Path "opus-build") { Remove-Item "opus-build" -Recurse -Force }
-        cmake -S "opus-src" -B "opus-build" -G "Visual Studio 17 2022" -A Win32 -DOPUS_BUILD_PROGRAMS=OFF -DOPUS_BUILD_TESTING=OFF
-        if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: CMake configure failed"; exit $LASTEXITCODE }
-        Write-Host "Building Opus..."
-        cmake --build "opus-build" --config Release --parallel
-        if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: Opus build failed"; exit $LASTEXITCODE }
-        $opusLib = Get-ChildItem "opus-build" -Recurse -Filter "opus.lib" | Select-Object -First 1
-        if (-not $opusLib) { Write-Host "ERROR: opus.lib not found"; Get-ChildItem "opus-build" -Recurse -File | Select-Object -First 100 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
-        $dest = Join-Path (Join-Path "${{ github.workspace }}" "..") "third_party/opus/Win32"
-        New-Item -ItemType Directory -Force -Path $dest | Out-Null
-        Copy-Item $opusLib.FullName "$dest\opus.lib" -Force
-        if (-not (Test-Path "$dest\opus.lib")) { Write-Host "ERROR: opus.lib copy failed"; exit 1 }
-        Write-Host "Opus library ready: $dest\opus.lib"
+      - name: Setup Opus
+        shell: pwsh
+        run: |
+          Set-Location "${{ github.workspace }}"
+          Invoke-WebRequest -Uri "https://github.com/xiph/opus/archive/refs/tags/v1.5.2.zip" -OutFile "opus.zip"
+          if (Test-Path "opus-src") { Remove-Item "opus-src" -Recurse -Force }
+          if (Test-Path "opus-build") { Remove-Item "opus-build" -Recurse -Force }
+          Expand-Archive -Path "opus.zip" -DestinationPath "." -Force
+          $opusDir = Get-ChildItem -Directory | Where-Object { $_.Name -like "opus-1.5.2*" } | Select-Object -First 1
+          if (-not $opusDir) { throw "Opus source not found" }
+          Rename-Item $opusDir.FullName "opus-src"
+          cmake -S opus-src -B opus-build -G "Visual Studio 17 2022" -A Win32 -DOPUS_BUILD_PROGRAMS=OFF -DOPUS_BUILD_TESTING=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build opus-build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $opusLib = Get-ChildItem opus-build -Recurse -Filter opus.lib | Select-Object -First 1
+          if (-not $opusLib) { throw "opus.lib not found" }
+          $dest = Join-Path "${{ github.workspace }}\.." "third_party\opus\Win32"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item $opusLib.FullName (Join-Path $dest "opus.lib") -Force
+          Write-Host "Opus ready: $(Join-Path $dest 'opus.lib')"
 
-    - name: Setup Directory Structure
-      shell: pwsh
-      run: |
-        Set-Location "${{ github.workspace }}"
-        Set-Location ".."
-
-        Write-Host "Setting up directory structure..."
-
-        # Create PJSIP directory structure expected by MicroSIP
-        $pjPaths = @(
-            "pjlib/include/pj",
-            "pjlib/lib",
-            "pjsip/include/pjsip",
-            "pjsip/lib",
-            "pjmedia/include/pjmedia",
-            "pjmedia/lib",
-            "pjnath/include/pjnath",
-            "pjnath/lib",
-            "pjlib-util/include/pjlib-util",
-            "pjlib-util/lib",
-            "third_party/lib",
-            "third_party/openssl/Win32/include",
-            "third_party/openssl/Win32/lib",
-            "third_party/ipp/Win32",
-            "third_party/opus/Win32",
-            "third_party/silk/Win32/Release",
-            "third_party/ffmpeg/Win32",
-            "third_party/vpx/Win32",
-            "third_party/sdl/Win32",
-            "third_party/opencore-amrnb/Win32",
-            "third_party/vo-amrwbenc/Win32",
-            "third_party/opencore-amrwb/Win32",
-            "third_party/hid/Win32",
-            "lib"
-        )
-
-        foreach ($path in $pjPaths) {
-            New-Item -ItemType Directory -Force -Path $path | Out-Null
-        }
-
-        Write-Host "Directory structure created"
-
-    - name: Download and Build PJSIP
-      shell: pwsh
-      run: |
-        Set-Location "${{ github.workspace }}"
-        Set-Location ".."
-
-        # Check if PJSIP already built
-        if (Test-Path "pjproject/lib/pjlib-i386-Win32-vc14-Release.lib") {
-            Write-Host "PJSIP already built, skipping..."
-            exit 0
-        }
-
-        Write-Host "Downloading PJSIP..."
-
-        # Download PJSIP 2.15.1 (matching MicroSIP 3.22.3 requirements)
-        $pjsipVersion = "2.15.1"
-        $pjsipUrl = "https://github.com/pjsip/pjproject/archive/refs/tags/$pjsipVersion.zip"
-
-        try {
-            Invoke-WebRequest -Uri $pjsipUrl -OutFile "pjproject.zip" -TimeoutSec 120
-            Expand-Archive -Path "pjproject.zip" -DestinationPath "." -Force
-
-            if (Test-Path "pjproject-$pjsipVersion") {
-                Remove-Item -Recurse -Force "pjproject" -ErrorAction SilentlyContinue
-                Rename-Item "pjproject-$pjsipVersion" "pjproject" -Force
+      - name: Download and Build PJSIP
+        shell: pwsh
+        run: |
+          Set-Location "${{ github.workspace }}\.."
+          if (Test-Path "pjproject") { Remove-Item "pjproject" -Recurse -Force }
+          Invoke-WebRequest -Uri "https://github.com/pjsip/pjproject/archive/refs/tags/2.15.1.zip" -OutFile "pjproject.zip" -TimeoutSec 120
+          Expand-Archive -Path "pjproject.zip" -DestinationPath "." -Force
+          Rename-Item "pjproject-2.15.1" "pjproject"
+          Set-Location "pjproject"
+          $configLines = @(
+            '/* BDPBXConnect PJSIP configuration */',
+            '#ifndef __PJ_CONFIG_SITE_H__',
+            '#define __PJ_CONFIG_SITE_H__',
+            '#define PJ_CONFIG_MICROSIP 1',
+            '#define PJMEDIA_HAS_VIDEO 1',
+            '#define PJMEDIA_HAS_FFMPEG 0',
+            '#define PJMEDIA_HAS_VPX 0',
+            '#define PJMEDIA_HAS_OPUS 1',
+            '#define PJMEDIA_HAS_SILK 1',
+            '#define PJMEDIA_HAS_G722 1',
+            '#define PJMEDIA_HAS_G7221 1',
+            '#define PJMEDIA_HAS_G726 1',
+            '#define PJMEDIA_HAS_G729 1',
+            '#define PJMEDIA_HAS_GSM 1',
+            '#define PJMEDIA_HAS_SPEEX 1',
+            '#define PJMEDIA_HAS_ILBC 1',
+            '#define PJMEDIA_HAS_SRTP 1',
+            '#define PJMEDIA_HAS_TLS 1',
+            '#define PJMEDIA_HAS_WEBRTC_AEC 1',
+            '#define PJMEDIA_HAS_WEBRTC_VAD 1',
+            '#include <pj/config_site_sample.h>',
+            '#endif'
+          )
+          Set-Content -Path "pjlib\include\pj\config_site.h" -Value $configLines
+          $projects = @(
+            "pjlib/build/pjlib.vcxproj",
+            "pjnath/build/pjnath.vcxproj",
+            "pjmedia/build/pjmedia.vcxproj",
+            "pjsip/build/pjsip_simple.vcxproj",
+            "pjsip/build/pjsua_lib.vcxproj"
+          )
+          foreach ($proj in $projects) {
+            if (Test-Path $proj) {
+              Write-Host "Building $proj"
+              & msbuild $proj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /m
+              if ($LASTEXITCODE -ne 0 -and $proj -notlike "pjmedia/*") { exit $LASTEXITCODE }
+              if ($LASTEXITCODE -ne 0) { Write-Host "Warning: pjmedia build failed; continuing." }
             }
-        } catch {
-            Write-Host "Failed to download PJSIP: $_"
-            exit 1
-        }
+          }
 
-        Set-Location "pjproject"
+      - name: Copy PJSIP Libraries and Headers
+        shell: pwsh
+        run: |
+          Set-Location "${{ github.workspace }}\.."
+          New-Item -ItemType Directory -Force -Path "lib","pjlib\include","pjlib-util\include","pjnath\include","pjmedia\include","pjsip\include" | Out-Null
+          Get-ChildItem "pjproject" -Recurse -Filter "*.lib" -File | ForEach-Object { Copy-Item $_.FullName "lib\" -Force }
+          Copy-Item "pjproject\pjlib\include\*" "pjlib\include\" -Recurse -Force
+          Copy-Item "pjproject\pjlib-util\include\*" "pjlib-util\include\" -Recurse -Force
+          Copy-Item "pjproject\pjnath\include\*" "pjnath\include\" -Recurse -Force
+          Copy-Item "pjproject\pjmedia\include\*" "pjmedia\include\" -Recurse -Force
+          Copy-Item "pjproject\pjsip\include\*" "pjsip\include\" -Recurse -Force
+          if (-not (Test-Path "pjsip\include\pjsua-lib\pjsua.h")) { throw "pjsua.h not found" }
 
-        Write-Host "Configuring PJSIP..."
-
-        # Create config_site.h for MicroSIP
-        $configLines = @(
-          '/* MicroSIP Configuration for PJSIP */',
-          '#ifndef __PJ_CONFIG_SITE_H__',
-          '#define __PJ_CONFIG_SITE_H__',
-          '',
-          '#define PJ_CONFIG_MICROSIP 1',
-          '',
-          '/* Video support */',
-          '#define PJMEDIA_HAS_VIDEO 1',
-          '#define PJMEDIA_HAS_FFMPEG 1',
-          '#define PJMEDIA_HAS_VPX 1',
-          '',
-          '/* Audio codecs */',
-          '#define PJMEDIA_HAS_OPUS 1',
-          '#define PJMEDIA_HAS_SILK 1',
-          '#define PJMEDIA_HAS_G722 1',
-          '#define PJMEDIA_HAS_G7221 1',
-          '#define PJMEDIA_HAS_G726 1',
-          '#define PJMEDIA_HAS_G729 1',
-          '#define PJMEDIA_HAS_GSM 1',
-          '#define PJMEDIA_HAS_SPEEX 1',
-          '#define PJMEDIA_HAS_ILBC 1',
-          '',
-          '/* Security */',
-          '#define PJMEDIA_HAS_SRTP 1',
-          '#define PJMEDIA_HAS_TLS 1',
-          '',
-          '/* WebRTC audio processing */',
-          '#define PJMEDIA_HAS_WEBRTC_AEC 1',
-          '#define PJMEDIA_HAS_WEBRTC_VAD 1',
-          '',
-          '/* Include default config */',
-          '#include <pj/config_site_sample.h>',
-          '',
-          '#endif /* __PJ_CONFIG_SITE_H__ */'
-        )
-        Set-Content -Path "pjlib/include/pj/config_site.h" -Value $configLines
-
-        Write-Host "Building PJSIP with MSBuild..."
-
-        # Build PJSIP using MSBuild with solution file
-        $msbuild = "msbuild"
-
-        # Try to build using solution file first
-        if (Test-Path "pjproject.sln") {
-            Write-Host "Building using solution file..."
-            & $msbuild "pjproject.sln" /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /m
-        } else {
-            # Build individual projects
-            Write-Host "Building individual projects..."
-            $projects = @(
-                "pjlib/build/pjlib.vcxproj",
-                "pjlib-util/build/pjlib-util.vcxproj",
-                "pjnath/build/pjnath.vcxproj",
-                "pjmedia/build/pjmedia.vcxproj",
-                "pjsip/build/pjsip.vcxproj",
-                "pjsip/build/pjsip_simple.vcxproj",
-                "pjsip/build/pjsua_lib.vcxproj"
-            )
-
-            foreach ($proj in $projects) {
-                if (Test-Path $proj) {
-                    Write-Host "Building $proj..."
-                    & $msbuild $proj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /m
-                    if ($LASTEXITCODE -ne 0) {
-                        Write-Host "Warning: Build of $proj may have issues, continuing..."
-                    }
-                } else {
-                    Write-Host "Project file not found: $proj"
-                }
-            }
-        }
-
-        Write-Host "PJSIP build completed"
-
-    - name: Copy PJSIP Libraries
-      shell: pwsh
-      run: |
-        Set-Location "${{ github.workspace }}"
-        Set-Location ".."
-
-        Write-Host "Copying PJSIP libraries and headers..."
-
-        $libSource = "pjproject"
-        $libDest = "lib"
-
-        if (-not (Test-Path $libSource)) {
-            Write-Host "ERROR: pjproject directory not found"
-            exit 1
-        }
-
-        New-Item -ItemType Directory -Force -Path "lib" | Out-Null
-        New-Item -ItemType Directory -Force -Path "pjlib/include" | Out-Null
-        New-Item -ItemType Directory -Force -Path "pjlib-util/include" | Out-Null
-        New-Item -ItemType Directory -Force -Path "pjnath/include" | Out-Null
-        New-Item -ItemType Directory -Force -Path "pjmedia/include" | Out-Null
-        New-Item -ItemType Directory -Force -Path "pjsip/include" | Out-Null
-
-        Get-ChildItem -Path "$libSource\lib\*.lib" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-            Copy-Item $_.FullName -Destination "$libDest\" -Force
-        }
-
-        Copy-Item "pjproject\pjlib\include\*" -Destination "pjlib\include\" -Recurse -Force
-        Copy-Item "pjproject\pjlib-util\include\*" -Destination "pjlib-util\include\" -Recurse -Force
-        Copy-Item "pjproject\pjnath\include\*" -Destination "pjnath\include\" -Recurse -Force
-        Copy-Item "pjproject\pjmedia\include\*" -Destination "pjmedia\include\" -Recurse -Force
-        Copy-Item "pjproject\pjsip\include\*" -Destination "pjsip\include\" -Recurse -Force
-
-        if (Test-Path "pjsip\include\pjsua-lib\pjsua.h") {
-            Write-Host "Verified: pjsua-lib/pjsua.h"
-        } else {
-            Write-Host "ERROR: pjsua-lib/pjsua.h was not found"
-            Get-ChildItem "pjproject\pjsip\include" -Recurse -Filter "pjsua.h" | ForEach-Object {
-                Write-Host $_.FullName
-            }
-            exit 1
-        }
-
-        Write-Host "PJSIP headers and libraries copied successfully"
-
-    - name: Prepare PJSIP Static Library
-      shell: pwsh
-      run: |
-        Set-Location "${{ github.workspace }}"
-
-        Write-Host "Preparing combined PJSIP static library..."
-
-        $root = Split-Path $env:GITHUB_WORKSPACE -Parent
-        $pjRoot = Join-Path $root "pjproject"
-        $libDir = Join-Path $root "lib"
-
-        New-Item -ItemType Directory -Force -Path $libDir | Out-Null
-
-        $names = @(
-          "pjlib-i386-Win32-vc14-Release.lib",
-          "pjnath-i386-Win32-vc14-Release.lib",
-          "pjsip-simple-i386-Win32-vc14-Release.lib",
-          "pjsua-lib-i386-Win32-vc14-Release.lib"
-        )
-
-        Write-Host "Searching under: $pjRoot"
-
-        $existing = @()
-
-        foreach ($name in $names) {
-          $match = Get-ChildItem -Path $pjRoot -Recurse -Filter $name -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($match) {
+      - name: Prepare PJSIP Static Library
+        shell: pwsh
+        run: |
+          Set-Location "${{ github.workspace }}"
+          $root = Split-Path $env:GITHUB_WORKSPACE -Parent
+          $pjRoot = Join-Path $root "pjproject"
+          $libDir = Join-Path $root "lib"
+          New-Item -ItemType Directory -Force -Path $libDir | Out-Null
+          $names = @(
+            "pjlib-i386-Win32-vc14-Release.lib",
+            "pjnath-i386-Win32-vc14-Release.lib",
+            "pjsip-simple-i386-Win32-vc14-Release.lib",
+            "pjsua-lib-i386-Win32-vc14-Release.lib"
+          )
+          $existing = @()
+          foreach ($name in $names) {
+            $match = Get-ChildItem -Path $pjRoot -Recurse -Filter $name -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $match) { throw "Missing PJSIP library: $name" }
             $existing += $match.FullName
             Write-Host "FOUND: $($match.FullName)"
-          } else {
-            Write-Host "NOT FOUND: $name"
           }
-        }
+          $msvcRoot = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
+          $libExe = Get-ChildItem -Path $msvcRoot -Recurse -Filter "lib.exe" -File | Where-Object { $_.FullName -match "\\HostX86\\x86\\lib\.exe$" } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $libExe) { throw "lib.exe not found" }
+          $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
+          Write-Host "Using lib.exe: $($libExe.FullName)"
+          Write-Host "Creating: $target"
+          & $libExe.FullName "/OUT:$target" $existing
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path $target)) { throw "Combined PJSIP library was not created" }
+          Write-Host "Combined PJSIP library ready: $target"
 
-        if ($existing.Count -eq 0) {
-          Write-Host "ERROR: No PJSIP libraries found"
-          Write-Host "Searching all .lib files under pjproject..."
-          Get-ChildItem -Path $pjRoot -Recurse -Filter "*.lib" -File -ErrorAction SilentlyContinue | Select-Object -First 100 | ForEach-Object { Write-Host $_.FullName }
-          exit 1
-        }
+      - name: Build BD PBX Connect
+        working-directory: ${{ github.workspace }}
+        shell: pwsh
+        run: |
+          & msbuild BDPBXConnect.vcxproj /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=${{ env.BUILD_PLATFORM }} /p:PlatformToolset=v143 /m
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "BD PBX Connect build completed successfully"
 
-        Write-Host "PJSIP libraries found: $($existing.Count)"
+      - name: Prepare Output
+        shell: pwsh
+        run: |
+          Set-Location "${{ github.workspace }}"
+          New-Item -ItemType Directory -Force -Path output | Out-Null
+          if (Test-Path "Release\BDPBXConnect.exe") { Copy-Item "Release\BDPBXConnect.exe" "output\" -Force } else { throw "BDPBXConnect.exe not found" }
+          Get-ChildItem "Release" -Filter "*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination "output\" -Force
 
-        $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
-
-        Write-Host "Creating combined library..."
-        $libExe = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC" -Recurse -Filter "lib.exe" | Where-Object { $_.FullName -match "\\HostX86\\x86\\" } | Select-Object -First 1; if (-not $libExe) { Write-Host "ERROR: lib.exe not found"; exit 1 }; Write-Host "Using lib.exe: $($libExe.FullName)"; & .FullName $libExe.FullName "/OUT:$target" $existing
-
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "ERROR: Failed to create combined PJSIP library"
-          exit $LASTEXITCODE
-        }
-
-        if (-not (Test-Path $target)) {
-          Write-Host "ERROR: Combined PJSIP library was not created"
-          exit 1
-        }
-
-        Write-Host "Combined PJSIP library ready:"
-        Write-Host $target
-
-    - name: Build BD PBX Connect
-
-      working-directory: ${{ github.workspace }}
-      shell: pwsh
-      run: |
-        Write-Host "Building MicroSIP..."
-
-        $msbuild = "msbuild"
-
-        # Build BD PBX Connect
-        & $msbuild BDPBXConnect.vcxproj `
-            /p:Configuration=${{env.BUILD_CONFIGURATION}} `
-            /p:Platform=${{env.BUILD_PLATFORM}} `
-            /p:PlatformToolset=v143 `
-            /m
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "MicroSIP build failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
-        }
-
-        Write-Host "MicroSIP build completed successfully"
-
-    - name: Prepare Output
-      shell: pwsh
-      run: |
-        Set-Location "${{ github.workspace }}"
-
-        # Create output directory
-        New-Item -ItemType Directory -Force -Path "output" | Out-Null
-
-        # Copy executable
-        if (Test-Path "Release/BDPBXConnect.exe") {
-            Copy-Item "Release/BDPBXConnect.exe" -Destination "output/" -Force
-            Write-Host "Copied BDPBXConnect.exe"
-        } else {
-            Write-Host "Warning: BDPBXConnect.exe not found in Release/"
-            Get-ChildItem -Path "Release/" -ErrorAction SilentlyContinue
-        }
-
-        # Copy any DLLs
-        if (Test-Path "Release/*.dll") {
-            Copy-Item "Release/*.dll" -Destination "output/" -Force
-            Write-Host "Copied DLLs"
-        }
-
-        # List output
-        Write-Host "Output directory contents:"
-        Get-ChildItem -Path "output" -Recurse | ForEach-Object {
-            Write-Host "  $($_.FullName)"
-        }
-
-    - name: Upload Build Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: BDPBXConnect-Build
-        path: ${{ github.workspace }}/output/
-
-    - name: Create Portable ZIP
-      shell: pwsh
-      run: |
-        Set-Location "${{ github.workspace }}"
-
-        if (Test-Path "output/BDPBXConnect.exe") {
-            Compress-Archive -Path "output/*" -DestinationPath "BDPBXConnect-1.0.0-portable.zip" -Force
-            Write-Host "Created portable ZIP archive"
-        } else {
-            Write-Host "Warning: Cannot create portable ZIP - BDPBXConnect.exe not found"
-        }
-
-    - name: Upload Portable Archive
-      uses: actions/upload-artifact@v4
-      with:
-        name: BDPBXConnect-Portable
-        path: ${{ github.workspace }}/MicroSIP-*.zip
-
-  create-installer:
-    needs: build
-    runs-on: windows-2022
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download Build Artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: BDPBXConnect-Build
-        path: ${{ github.workspace }}/output/
-
-    - name: Install Inno Setup
-      shell: pwsh
-      run: |
-        choco install innosetup -y
-
-    - name: Create Installer Script
-      shell: pwsh
-      run: |
-        Set-Location "${{ github.workspace }}"
-
-        $installerLines = @(
-          '#define MyAppName "BD PBX Connect"',
-          '#define MyAppVersion "3.22.3"',
-          '#define MyAppPublisher "BD PBX"',
-          '#define MyAppURL "https://bdpbx.com"',
-          '#define MyAppExeName "BDPBXConnect.exe"',
-          '',
-          '[Setup]',
-          'AppId={{BDPBXConnect-1.0.0}}',
-          'AppName={#MyAppName}',
-          'AppVersion={#MyAppVersion}',
-          'AppPublisher={#MyAppPublisher}',
-          'AppPublisherURL={#MyAppURL}',
-          'AppSupportURL={#MyAppURL}',
-          'AppUpdatesURL={#MyAppURL}',
-          'DefaultDirName={autopf}\{#MyAppName}',
-          'DisableProgramGroupPage=yes',
-          'LicenseFile=LICENSE',
-          'OutputDir=.',
-          'OutputBaseFilename=BDPBXConnect-1.0.0',
-          'SetupIconFile=res\bdpbx.ico',
-          'Compression=lzma',
-          'SolidCompression=yes',
-          'WizardStyle=modern',
-          '',
-          '[Languages]',
-          'Name: "english"; MessagesFile: "compiler:Default.isl"',
-          '',
-          '[Tasks]',
-          'Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked',
-          '',
-          '[Files]',
-          'Source: "output\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion',
-          'Source: "output\*.dll"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs',
-          'Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion',
-          '',
-          '[Icons]',
-          'Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"',
-          'Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon',
-          '',
-          '[Run]',
-          'Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, ''&'', ''&&'')}}"; Flags: nowait postinstall skipifsilent'
-        )
-        Set-Content -Path "installer.iss" -Value $installerLines
-
-    - name: Build Installer
-      shell: pwsh
-      run: |
-        Set-Location "${{ github.workspace }}"
-
-        $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-        if (Test-Path $isccPath) {
-            & $isccPath "installer.iss"
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "Installer created successfully"
-            } else {
-                Write-Host "Installer creation failed with exit code $LASTEXITCODE"
-                exit $LASTEXITCODE
-            }
-        } else {
-            Write-Host "Inno Setup compiler not found"
-            exit 1
-        }
-
-    - name: Upload Installer
-      uses: actions/upload-artifact@v4
-      with:
-        name: BDPBXConnect-Installer
-        path: ${{ github.workspace }}/BDPBXConnect-1.0.0.exe
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BDPBXConnect-Windows
+          path: output/

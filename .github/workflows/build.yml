@@ -109,6 +109,7 @@ jobs:
             $text = Get-Content -Raw -Path $p
             $text = $text -replace '<RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>'
             $text = $text -replace '<RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
+            $text = $text -replace 'libopus\.a', 'opus.lib'
             Set-Content -Path $p -Value $text
           }
           $projects = @(

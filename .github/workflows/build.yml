@@ -45,28 +45,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $opusLib = Get-ChildItem opus-build -Recurse -Filter opus.lib | Select-Object -First 1
           if (-not $opusLib) { throw "opus.lib not found" }
-          $dest = Join-Path "${{ github.workspace }}\.." "third_party\opus\Win32"
+          $root = "${{ github.workspace }}\.."
+          $dest = Join-Path $root "third_party\opus\Win32"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           Copy-Item $opusLib.FullName (Join-Path $dest "opus.lib") -Force
-          Write-Host "Opus ready: $(Join-Path $dest 'opus.lib')"
-
-          # Make Opus headers available to PJSIP's existing ../../third_party include path.
-          $pjRoot = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) "pjproject"
-          $pjOpusInclude = Join-Path $pjRoot "third_party\opus"
-          New-Item -ItemType Directory -Force -Path $pjOpusInclude | Out-Null
-          Copy-Item (Join-Path $env:GITHUB_WORKSPACE "opus-src\include\opus\*") $pjOpusInclude -Recurse -Force
-          if (-not (Test-Path (Join-Path $pjOpusInclude "opus.h"))) { throw "PJSIP Opus header was not copied" }
-          Write-Host "PJSIP Opus header ready: $(Join-Path $pjOpusInclude 'opus.h')"
+          Write-Host "Opus library ready: $(Join-Path $dest 'opus.lib')"
 
       - name: Download and Build PJSIP
         shell: pwsh
         run: |
           Set-Location "${{ github.workspace }}\.."
+          $root = Get-Location
           if (Test-Path "pjproject") { Remove-Item "pjproject" -Recurse -Force }
           Invoke-WebRequest -Uri "https://github.com/pjsip/pjproject/archive/refs/tags/2.15.1.zip" -OutFile "pjproject.zip" -TimeoutSec 120
           Expand-Archive -Path "pjproject.zip" -DestinationPath "." -Force
           Rename-Item "pjproject-2.15.1" "pjproject"
-          Set-Location "pjproject"
+          $pjRoot = Join-Path $root "pjproject"
+          $opusInclude = Join-Path $env:GITHUB_WORKSPACE "opus-src\include"
+          $pjOpusInclude = Join-Path $pjRoot "third_party\opus"
+          New-Item -ItemType Directory -Force -Path $pjOpusInclude | Out-Null
+          Copy-Item (Join-Path $opusInclude "opus") $pjOpusInclude -Recurse -Force
+          if (-not (Test-Path (Join-Path $pjOpusInclude "opus\opus.h"))) { throw "PJSIP Opus header was not copied" }
+          Write-Host "PJSIP Opus header ready: $(Join-Path $pjOpusInclude 'opus\opus.h')"
+          Set-Location $pjRoot
           $configLines = @(
             '/* BDPBXConnect PJSIP configuration */',
             '#ifndef __PJ_CONFIG_SITE_H__',

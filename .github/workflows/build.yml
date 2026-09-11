@@ -88,6 +88,17 @@ jobs:
           )
           Set-Content -Path "pjlib\include\pj\config_site.h" -Value $configLines
 
+          # PJSIP projects import shared .props files which can override the
+          # project RuntimeLibrary setting. Replace the runtime setting in
+          # BOTH vcxproj and props files so every object is built with /MT.
+          Get-ChildItem -Path . -Recurse -File | Where-Object { $_.Extension -in @('.vcxproj','.props') } | ForEach-Object {
+            $p = $_.FullName
+            $text = Get-Content -Raw -Path $p
+            $text = $text -replace '<RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>'
+            $text = $text -replace '<RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
+            Set-Content -Path $p -Value $text
+          }
+
           $projects = @(
             "pjlib/build/pjlib.vcxproj",
             "pjlib-util/build/pjlib_util.vcxproj",
@@ -151,7 +162,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         shell: pwsh
         run: |
-          & msbuild BDPBXConnect.vcxproj /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=${{ env.BUILD_PLATFORM }} /p:PlatformToolset=v143 /p:RuntimeLibrary=MultiThreaded /p:UseEnv=false /m
+          & msbuild BDPBXConnect.vcxproj /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=${{ env.BUILD_PLATFORM }} /p:PlatformToolset=v143 /p:RuntimeLibrary=MultiThreaded /p:UseEnv=false /p:AdditionalDependencies="opus.lib;Wtsapi32.lib;libpjproject-i386-Win32-vc14-Release-Static.lib;%(AdditionalDependencies)" /m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host "BD PBX Connect build completed successfully"
 

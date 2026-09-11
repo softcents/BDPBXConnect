@@ -96,7 +96,7 @@ jobs:
           foreach ($proj in $projects) {
             if (Test-Path $proj) {
               Write-Host "Building $proj"
-              & msbuild $proj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /m
+              & msbuild $proj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /p:RuntimeLibrary=MultiThreaded /m
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             } else {
               throw "Required PJSIP project not found: $proj"
@@ -124,18 +124,13 @@ jobs:
           $pjRoot = Join-Path $root "pjproject"
           $libDir = Join-Path $root "lib"
           New-Item -ItemType Directory -Force -Path $libDir | Out-Null
-
           $existing = @(Get-ChildItem -Path $pjRoot -Recurse -Filter "*-i386-Win32-vc14-Release.lib" -File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName -Unique)
-          if ($existing.Count -eq 0) {
-            throw "No PJSIP Win32 Release libraries were found"
-          }
+          if ($existing.Count -eq 0) { throw "No PJSIP Win32 Release libraries were found" }
           Write-Host "PJSIP libraries found: $($existing.Count)"
           $existing | ForEach-Object { Write-Host "FOUND: $_" }
-
           $msvcRoot = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
           $libExe = Get-ChildItem -Path $msvcRoot -Recurse -Filter "lib.exe" -File | Where-Object { $_.FullName -match "\\HostX86\\x86\\lib\.exe$" } | Sort-Object FullName -Descending | Select-Object -First 1
           if (-not $libExe) { throw "lib.exe not found" }
-
           $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
           Write-Host "Using lib.exe: $($libExe.FullName)"
           Write-Host "Creating: $target"
@@ -148,7 +143,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         shell: pwsh
         run: |
-          & msbuild BDPBXConnect.vcxproj /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=${{ env.BUILD_PLATFORM }} /p:PlatformToolset=v143 /m
+          & msbuild BDPBXConnect.vcxproj /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=${{ env.BUILD_PLATFORM }} /p:PlatformToolset=v143 /p:RuntimeLibrary=MultiThreaded /m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host "BD PBX Connect build completed successfully"
 

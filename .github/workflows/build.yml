@@ -74,16 +74,30 @@ jobs:
             '#define PJMEDIA_HAS_G726 1',
             '#define PJMEDIA_HAS_G729 1',
             '#define PJMEDIA_HAS_GSM 1',
-            '#define PJMEDIA_HAS_SPEEX 1',
+            '#define PJMEDIA_HAS_SPEEX 0',
+            '#define PJMEDIA_HAS_SPEEX_AEC 0',
             '#define PJMEDIA_HAS_ILBC 1',
-            '#define PJMEDIA_HAS_SRTP 1',
+            '#define PJMEDIA_HAS_SRTP 0',
             '#define PJMEDIA_HAS_TLS 1',
-            '#define PJMEDIA_HAS_WEBRTC_AEC 1',
-            '#define PJMEDIA_HAS_WEBRTC_VAD 1',
+            '#define PJMEDIA_HAS_WEBRTC_AEC 0',
+            '#define PJMEDIA_HAS_WEBRTC_VAD 0',
+            '#define PJMEDIA_HAS_WEBRTC_AEC3 0',
+            '#define PJMEDIA_RESAMPLE_IMP PJMEDIA_RESAMPLE_NONE',
             '#include <pj/config_site_sample.h>',
             '#endif'
           )
           Set-Content -Path "pjlib\include\pj\config_site.h" -Value $configLines
+
+          # The generated PJSIP VS projects default to /MD. Force the same
+          # static MSVC runtime used by BDPBXConnect (/MT).
+          Get-ChildItem -Path . -Recurse -Filter "*.vcxproj" -File | ForEach-Object {
+            $p = $_.FullName
+            $text = Get-Content -Raw -Path $p
+            $text = $text -replace '<RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>'
+            $text = $text -replace '<RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
+            Set-Content -Path $p -Value $text
+          }
+
           $projects = @(
             "pjlib/build/pjlib.vcxproj",
             "pjlib-util/build/pjlib_util.vcxproj",
@@ -91,12 +105,13 @@ jobs:
             "pjmedia/build/pjmedia.vcxproj",
             "pjsip/build/pjsip_core.vcxproj",
             "pjsip/build/pjsip_simple.vcxproj",
+            "pjsip/build/pjsip_ua.vcxproj",
             "pjsip/build/pjsua_lib.vcxproj"
           )
           foreach ($proj in $projects) {
             if (Test-Path $proj) {
               Write-Host "Building $proj"
-              & msbuild $proj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /p:RuntimeLibrary=MultiThreaded /m
+              & msbuild $proj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /m
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             } else {
               throw "Required PJSIP project not found: $proj"
@@ -143,7 +158,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         shell: pwsh
         run: |
-          & msbuild BDPBXConnect.vcxproj /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=${{ env.BUILD_PLATFORM }} /p:PlatformToolset=v143 /p:RuntimeLibrary=MultiThreaded /m
+          & msbuild BDPBXConnect.vcxproj /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=${{ env.BUILD_PLATFORM }} /p:PlatformToolset=v143 /p:RuntimeLibrary=MultiThreaded /p:UseEnv=false /m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host "BD PBX Connect build completed successfully"
 

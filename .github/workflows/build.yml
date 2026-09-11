@@ -29,6 +29,46 @@ jobs:
         choco install 7zip -y
         choco install innosetup -y
 
+    - name: Setup Opus
+      shell: pwsh
+      run: |
+        Set-Location "${{ github.workspace }}"
+        Set-Location ".."
+
+        New-Item -ItemType Directory -Force -Path "third_party\opus\Win32" | Out-Null
+
+        Write-Host "Downloading Opus..."
+        $opusUrl = "https://github.com/xiph/opus/archive/refs/tags/v1.5.2.zip"
+        Invoke-WebRequest -Uri $opusUrl -OutFile "opus.zip"
+        Expand-Archive -Path "opus.zip" -DestinationPath "." -Force
+
+        $opusDir = Get-ChildItem -Directory -Filter "opus-*" | Select-Object -First 1
+        if (-not $opusDir) {
+            Write-Host "ERROR: Opus source not found"
+            exit 1
+        }
+
+        Write-Host "Configuring Opus..."
+        Set-Location $opusDir.FullName
+
+        if (Test-Path "win32\VS2015\opus.sln") {
+            & msbuild "win32\VS2015\opus.sln" /p:Configuration=Release /p:Platform=Win32 /m
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        } else {
+            Write-Host "ERROR: Opus Visual Studio solution not found"
+            exit 1
+        }
+
+        Get-ChildItem -Path "." -Recurse -Filter "opus.lib" | ForEach-Object {
+            Copy-Item $_.FullName -Destination "${{ github.workspace }}\..\third_party\opus\Win32\opus.lib" -Force
+        }
+
+        if (-not (Test-Path "${{ github.workspace }}\..\third_party\opus\Win32\opus.lib")) {
+            Write-Host "ERROR: opus.lib was not created"
+            exit 1
+        }
+
+        Write-Host "Opus library ready"
     - name: Setup Directory Structure
       shell: pwsh
       run: |

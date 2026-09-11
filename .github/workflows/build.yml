@@ -49,7 +49,8 @@ jobs:
           $dest = Join-Path $root "third_party\opus\Win32"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           Copy-Item $opusLib.FullName (Join-Path $dest "opus.lib") -Force
-          Write-Host "Opus library ready: $(Join-Path $dest 'opus.lib')"
+          Copy-Item $opusLib.FullName (Join-Path $dest "libopus.a") -Force
+          Write-Host "Opus libraries ready: $(Join-Path $dest 'opus.lib') and $(Join-Path $dest 'libopus.a')"
 
       - name: Download and Build PJSIP
         shell: pwsh

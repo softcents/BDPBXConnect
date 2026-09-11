@@ -42,7 +42,7 @@ RTEXT           "Display Name", IDC_STATIC, 10, 164, 90, 8, SS_WORDELLIPSIS
 EDITTEXT        IDC_EDIT_DISPLAYNAME, 105, 161, 105, 16, ES_AUTOHSCROLL
 RTEXT           "Voicemail Number", IDC_STATIC, 10, 187, 90, 8, SS_WORDELLIPSIS
 EDITTEXT        IDC_EDIT_VOICEMAIL, 105, 184, 105, 16, ES_AUTOHSCROLL
-RTEXT           "Dialing Prefix", IDC_STATIC, 10, 210, 90, 8, SS_WORDELLIPSIS
+RTEXT           "Dialing Prefix", IDC_STATIC, 10, 210, 90, 8, SS_WORDELLIPSION
 EDITTEXT        IDC_ACCOUNT_DIALING_PREFIX, 105, 207, 105, 16, ES_AUTOHSCROLL
 RTEXT           "Dial Plan", IDC_STATIC, 10, 233, 90, 8, SS_WORDELLIPSIS
 EDITTEXT        IDC_ACCOUNT_DIAL_PLAN, 105, 230, 105, 16, ES_AUTOHSCROLL
@@ -73,8 +73,12 @@ Set-Content -Path $dialogPath -Value $dialog -Encoding utf8
 
 $cppPath = Join-Path $env:GITHUB_WORKSPACE 'AccountDlg.cpp'
 $cpp = Get-Content -Raw -Path $cppPath
-$replacement = 'CDialog::OnInitDialog();' + [Environment]::NewLine + [Environment]::NewLine + "`tSetWindowText(_T(" + '"' + 'BD PBX - Add Account' + '"' + '));'
-$cpp = $cpp.Replace('CDialog::OnInitDialog();', $replacement)
+$replacement = @'
+CDialog::OnInitDialog();
+
+	SetWindowText(_T("BD PBX - Add Account"));
+'@
+$cpp = $cpp.Replace('CDialog::OnInitDialog();', $replacement.TrimEnd())
 $cpp = $cpp.Replace("`tGetDlgItem(IDC_ACCOUNT_REQUIRED_USERNAME)->ShowWindow(show);`r`n`tGetDlgItem(IDC_ACCOUNT_REQUIRED_DOMAIN)->ShowWindow(show);`r`n`tGetDlgItem(IDC_EDIT_SERVER)->EnableWindow(id);", '')
 
 $oldLoad = @'

@@ -254,34 +254,33 @@ jobs:
 
         Write-Host "PJSIP headers and libraries copied successfully"
 
-- name: Prepare PJSIP Static Library
-  shell: pwsh
-  run: |
-    Set-Location "${{ github.workspace }}"
-    Write-Host "Preparing combined PJSIP static library..."
-    $root = Split-Path $env:GITHUB_WORKSPACE -Parent
-    $pjRoot = Join-Path $root "pjproject"
-    $libDir = Join-Path $root "lib"
-    New-Item -ItemType Directory -Force -Path $libDir | Out-Null
-    $names = @("pjlib-i386-Win32-vc14-Release.lib","pjnath-i386-Win32-vc14-Release.lib","pjsip-simple-i386-Win32-vc14-Release.lib","pjsua-lib-i386-Win32-vc14-Release.lib")
-    $existing = @()
-    foreach ($name in $names) {
-      $match = Get-ChildItem -Path $pjRoot -Recurse -Filter $name -File -ErrorAction SilentlyContinue | Select-Object -First 1
-      if (-not $match) { Write-Host "ERROR: Missing $name"; exit 1 }
-      $existing += $match.FullName
-      Write-Host "FOUND: $($match.FullName)"
-    }
-    $msvcRoot = "C:Program FilesMicrosoft Visual Studio2022EnterpriseVCToolsMSVC"
-    $libExe = Get-ChildItem -Path $msvcRoot -Directory | Sort-Object Name -Descending | ForEach-Object { Join-Path $_.FullName "binHostX86†lib.exe" } | Where-Object { Test-Path $_ } | Select-Object -First 1
-    if (-not $libExe) { Write-Host "ERROR: lib.exe not found"; exit 1 }
-    $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
-    Write-Host "Using lib.exe: $libExe"
-    & $libExe "/OUT:$target" $existing
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    if (-not (Test-Path $target)) { Write-Host "ERROR: Combined PJSIP library was not created"; exit 1 }
-    Write-Host "Combined PJSIP library created successfully: $target"
+  - name: Prepare PJSIP Static Library
+    shell: pwsh
+    run: |
+      Set-Location "${{ github.workspace }}"
+      Write-Host "Preparing combined PJSIP static library..."
+      $root = Split-Path $env:GITHUB_WORKSPACE -Parent
+      $pjRoot = Join-Path $root "pjproject"
+      $libDir = Join-Path $root "lib"
+      New-Item -ItemType Directory -Force -Path $libDir | Out-Null
+      $names = @("pjlib-i386-Win32-vc14-Release.lib","pjnath-i386-Win32-vc14-Release.lib","pjsip-simple-i386-Win32-vc14-Release.lib","pjsua-lib-i386-Win32-vc14-Release.lib")
+      $existing = @()
+      foreach ($name in $names) {
+        $match = Get-ChildItem -Path $pjRoot -Recurse -Filter $name -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $match) { Write-Host "ERROR: Missing $name"; exit 1 }
+        $existing += $match.FullName
+        Write-Host "FOUND: $($match.FullName)"
+      }
+      $msvcRoot = "C:Program FilesMicrosoft Visual Studio2022EnterpriseVCToolsMSVC"
+      $libExe = Get-ChildItem -Path $msvcRoot -Directory | Sort-Object Name -Descending | ForEach-Object { Join-Path $_.FullName "binHostX86†lib.exe" } | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $libExe) { Write-Host "ERROR: lib.exe not found"; exit 1 }
+      $target = Join-Path $libDir "libpjproject-i386-Win32-vc14-Release-Static.lib"
+      Write-Host "Using lib.exe: $libExe"
+      & $libExe "/OUT:$target" $existing
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      if (-not (Test-Path $target)) { Write-Host "ERROR: Combined PJSIP library was not created"; exit 1 }
+      Write-Host "Combined PJSIP library created successfully: $target"
 
-    - name: Build BD PBX Connect
 
       working-directory: ${{ github.workspace }}
       shell: pwsh

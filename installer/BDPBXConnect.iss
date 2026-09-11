@@ -1,4 +1,4 @@
-#define MyAppName "BDPBXConnect"
+#define MyAppName "BD PBX"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "SoftCents"
 #define MyAppExeName "BDPBXConnect.exe"
@@ -11,7 +11,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer-output
-OutputBaseFilename=BDPBXConnect-Setup
+OutputBaseFilename=BDPBX-Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

@@ -18,6 +18,8 @@ WizardStyle=modern
 PrivilegesRequired=admin
 Uninstallable=yes
 UninstallDisplayName={#MyAppName}
+UninstallDisplayIcon={app}\BDPBXConnect.exe
+SetupIconFile=..\res\bdpbx.ico
 ArchitecturesInstallIn64BitMode=x64compatible
 
 [Files]

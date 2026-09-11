@@ -88,21 +88,14 @@ jobs:
           )
           Set-Content -Path "pjlib\include\pj\config_site.h" -Value $configLines
 
-          # The generated PJSIP VS projects default to /MD. Force the same
-          # static MSVC runtime used by BDPBXConnect (/MT).
-          Get-ChildItem -Path . -Recurse -Filter "*.vcxproj" -File | ForEach-Object {
-            $p = $_.FullName
-            $text = Get-Content -Raw -Path $p
-            $text = $text -replace '<RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>'
-            $text = $text -replace '<RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>', '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
-            Set-Content -Path $p -Value $text
-          }
-
           $projects = @(
             "pjlib/build/pjlib.vcxproj",
             "pjlib-util/build/pjlib_util.vcxproj",
             "pjnath/build/pjnath.vcxproj",
             "pjmedia/build/pjmedia.vcxproj",
+            "pjmedia/build/pjmedia_audiodev.vcxproj",
+            "pjmedia/build/pjmedia_codec.vcxproj",
+            "pjmedia/build/pjmedia_videodev.vcxproj",
             "pjsip/build/pjsip_core.vcxproj",
             "pjsip/build/pjsip_simple.vcxproj",
             "pjsip/build/pjsip_ua.vcxproj",
@@ -111,7 +104,7 @@ jobs:
           foreach ($proj in $projects) {
             if (Test-Path $proj) {
               Write-Host "Building $proj"
-              & msbuild $proj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /m
+              & msbuild $proj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /p:RuntimeLibrary=MultiThreaded /m
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             } else {
               throw "Required PJSIP project not found: $proj"

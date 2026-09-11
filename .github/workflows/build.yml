@@ -52,9 +52,9 @@ jobs:
         if (-not $opusLib) { Write-Host "ERROR: opus.lib not found"; Get-ChildItem "opus-build" -Recurse -File | Select-Object -First 100 | ForEach-Object { Write-Host $_.FullName }; exit 1 }
         $dest = "${{ github.workspace }}..	hird_partyopusWin32"
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
-        Copy-Item $opusLib.FullName "$destopus.lib" -Force
-        if (-not (Test-Path "$destopus.lib")) { Write-Host "ERROR: opus.lib copy failed"; exit 1 }
-        Write-Host "Opus library ready: $destopus.lib"
+        Copy-Item $opusLib.FullName "$dest\opus.lib" -Force
+        if (-not (Test-Path "$dest\opus.lib")) { Write-Host "ERROR: opus.lib copy failed"; exit 1 }
+        Write-Host "Opus library ready: $dest\opus.lib"
 
     - name: Setup Directory Structure
       shell: pwsh

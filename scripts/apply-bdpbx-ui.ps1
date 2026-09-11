@@ -2,6 +2,35 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Set-Location $env:GITHUB_WORKSPACE
 
+# Build the supplied BD PBX logo into the ICO used by the app and installer.
+$logoB64 = Join-Path $env:GITHUB_WORKSPACE 'res\bdpbx-logo.png.b64'
+$logoPng = Join-Path $env:GITHUB_WORKSPACE 'res\bdpbx-logo.png'
+$logoIco = Join-Path $env:GITHUB_WORKSPACE 'res\bdpbx.ico'
+if (-not (Test-Path $logoB64)) { throw 'BD PBX logo asset was not found' }
+$pngBytes = [Convert]::FromBase64String((Get-Content -Raw -Path $logoB64).Trim())
+[System.IO.File]::WriteAllBytes($logoPng, $pngBytes)
+
+# ICO containing the PNG image. Windows supports PNG-compressed icon images.
+$icoHeader = [byte[]](0,0,1,0,1,0)
+$entry = New-Object byte[] 16
+$entry[0] = 64
+$entry[1] = 64
+$entry[2] = 0
+$entry[3] = 0
+$entry[4] = 1
+$entry[5] = 0
+$entry[6] = 32
+$entry[7] = 0
+[BitConverter]::GetBytes([uint32]$pngBytes.Length).CopyTo($entry, 8)
+[BitConverter]::GetBytes([uint32]22).CopyTo($entry, 12)
+$ico = New-Object byte[] ($icoHeader.Length + $entry.Length + $pngBytes.Length)
+[Array]::Copy($icoHeader, 0, $ico, 0, $icoHeader.Length)
+[Array]::Copy($entry, 0, $ico, $icoHeader.Length, $entry.Length)
+[Array]::Copy($pngBytes, 0, $ico, 22, $pngBytes.Length)
+[System.IO.File]::WriteAllBytes($logoIco, $ico)
+if (-not (Test-Path $logoIco)) { throw 'BD PBX ICO was not created' }
+Write-Host "BD PBX logo ready: $logoIco"
+
 $dialogPath = Join-Path $env:GITHUB_WORKSPACE 'res\dialog.rc2'
 $dialog = Get-Content -Raw -Path $dialogPath
 $marker = '//-----------------------------ACCOUNT------------------------------------------'
@@ -138,4 +167,4 @@ else { throw 'AccountDlg save block not found' }
 
 $cpp = $cpp.Replace("`tedt = (CEdit*)", "`tedit = (CEdit*)")
 Set-Content -Path $cppPath -Value $cpp -Encoding utf8
-Write-Host 'BD PBX account dialog compact layout and Save handling applied successfully.'
+Write-Host 'BD PBX account dialog compact layout, Save handling, and logo applied successfully.'

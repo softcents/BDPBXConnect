@@ -26,9 +26,9 @@ jobs:
         run: |
           $path = Join-Path $env:GITHUB_WORKSPACE "AccountDlg.cpp"
           $text = Get-Content -Raw -Path $path
-          $text = $text.Replace('CDialog::OnInitDialog();\r\n\r\n\tSetWindowText(_T("BD PBX - Add Account"));', "CDialog::OnInitDialog();`r`n`r`n`tSetWindowText(_T(\"BD PBX - Add Account\"));")
+          $replacement = 'CDialog::OnInitDialog();' + [Environment]::NewLine + [Environment]::NewLine + ([char]9) + 'SetWindowText(_T("BD PBX - Add Account"));'
+          $text = $text.Replace('CDialog::OnInitDialog();\r\n\r\n\tSetWindowText(_T("BD PBX - Add Account"));', $replacement)
           Set-Content -Path $path -Value $text -Encoding utf8
-          if ($text.Contains('CDialog::OnInitDialog();\r\n')) { Write-Host "AccountDlg.cpp line endings normalized" }
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v3
